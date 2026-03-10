@@ -1,23 +1,23 @@
 #include "../../include/nodes/camera_node.hpp"
 
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 
 namespace nodes {
     CameraNode::CameraNode() : Node("camera_node") {
-        image_subscriber_ = this->create_subscription<sensor_msgs::msg::Image>(
-            "/bpc_prp_robot/camera",
+        image_subscriber_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+            "/bpc_prp_robot/camera/compressed",
             1,
             std::bind(&CameraNode::on_image_callback, this, std::placeholders::_1)
         );
         line_error_publisher_ = this->create_publisher<std_msgs::msg::Int8>("/bpc_prp_robot/line_error", 1);
-        RCLCPP_INFO(this->get_logger(), "CameraNode initialized and subscribed to /bpc_prp_robot/camera");
+        RCLCPP_INFO(this->get_logger(), "CameraNode initialized and subscribed to /bpc_prp_robot/camera/compressed");
     }
 
-    void CameraNode::on_image_callback(const sensor_msgs::msg::Image::SharedPtr msg) {
-        bool headless = false; // Set to true to disable OpenCV windows (for headless operation)
+    void CameraNode::on_image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
+        bool headless = true; // Set to true to disable OpenCV windows (for headless operation)
         try
         {
             cv::Mat frame = cv_bridge::toCvCopy(msg, "bgr8")->image;
@@ -93,6 +93,7 @@ namespace nodes {
                         auto msg = std_msgs::msg::Int8();
                         msg.data = error;
                         line_error_publisher_->publish(msg);
+                        RCLCPP_INFO(this->get_logger(), "Line error published: %d", error);
                     }
                 }
             }

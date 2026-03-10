@@ -13,6 +13,7 @@ RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 # Install necessary packages (nano, ping, ip utils)
 RUN apt-get update && apt-get install -y \
     nano \
+    ros-humble-image-transport-plugins \
     && rm -rf /var/lib/apt/lists/*
 
 # Add bashrc for the user
