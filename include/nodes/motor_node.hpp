@@ -1,7 +1,7 @@
 #pragma once
 
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/UInt8MultiArray.hpp>
+#include "std_msgs/msg/u_int8_multi_array.hpp"
 
 namespace nodes {
     class MotorNode : public rclcpp::Node {
@@ -11,6 +11,7 @@ namespace nodes {
 
         void spin() const;
     private:
-        rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr motor_command_publisher_; 
+        rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr motor_command_publisher_;
+        rclcpp::TimerBase::SharedPtr timer_;
     };
 }
