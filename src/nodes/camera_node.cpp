@@ -7,6 +7,7 @@
 
 // #define HEADLESS
 // #define DEBUG
+// #define PID
 
 namespace nodes {
     CameraNode::CameraNode() : Node("camera_node") {
@@ -95,8 +96,25 @@ namespace nodes {
                         // Draw image center line
                         cv::line(frame, cv::Point(width/2,0), cv::Point(width/2,height), cv::Scalar(255,0,0), 2);
                         #endif
+                        
+                        #ifndef PID
+                        int error = cx - width/2;
+                        #else
+                        // --- PID Controller
+                        static double integral = 0;
+                        static double previous_error = 0;
+                        double Kp = 0.1; // Proportional gain
+                        double Ki = 0.01; // Integral gain
+                        double Kd = 0.05; // Derivative gain
 
                         int error = cx - width/2;
+                        integral += error;
+                        double derivative = error - previous_error;
+                        double output = Kp * error + Ki * integral + Kd * derivative;
+                        previous_error = error;
+                        error = static_cast<int>(output);
+                        #endif
+
                         auto msg = std_msgs::msg::Int8();
                         msg.data = std::clamp(error, -128, 127); // Ensure error fits in int8
                         line_error_publisher_->publish(msg);
