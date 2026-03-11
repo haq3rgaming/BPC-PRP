@@ -4,6 +4,7 @@
 #include <std_msgs/msg/int8.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
+
 namespace nodes {
     class CameraNode : public rclcpp::Node {
     public:
