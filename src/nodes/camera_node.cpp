@@ -5,7 +5,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 
-#define HEADLESS
+// #define HEADLESS
+// #define DEBUG
 
 namespace nodes {
     CameraNode::CameraNode() : Node("camera_node") {
@@ -15,6 +16,7 @@ namespace nodes {
             std::bind(&CameraNode::on_image_callback, this, std::placeholders::_1)
         );
         line_error_publisher_ = this->create_publisher<std_msgs::msg::Int8>("/bpc_prp_robot/line_error", 1);
+        line_found_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/bpc_prp_robot/line_found", 1);
         RCLCPP_INFO(this->get_logger(), "CameraNode initialized and subscribed to /bpc_prp_robot/camera/compressed");
     }
 
@@ -74,7 +76,10 @@ namespace nodes {
                         int cx = M.m10 / M.m00;
                         int cy = M.m01 / M.m00 + height*0.6; // adjust for ROI
 
-                        
+                        auto line_found_msg = std_msgs::msg::Bool();
+                        line_found_msg.data = true;
+                        line_found_publisher_->publish(line_found_msg);
+
                         #ifndef HEADLESS
                         // Move contour points back to original frame coordinates from ROI
                         std::vector<cv::Point> contour_shifted;
@@ -93,10 +98,10 @@ namespace nodes {
 
                         int error = cx - width/2;
                         auto msg = std_msgs::msg::Int8();
-                        msg.data = error;
+                        msg.data = std::clamp(error, -128, 127); // Ensure error fits in int8
                         line_error_publisher_->publish(msg);
                         
-                        #ifndef HEADLESS
+                        #ifdef DEBUG
                         RCLCPP_INFO(this->get_logger(), "Line error published: %d", error);
                         #endif
                     }
@@ -104,12 +109,17 @@ namespace nodes {
             }
             else
             {
+                #ifdef DEBUG
                 RCLCPP_WARN(this->get_logger(), "Line not detected");
+                #endif
+
+                auto line_found_msg = std_msgs::msg::Bool();
+                line_found_msg.data = false;
+                line_found_publisher_->publish(line_found_msg);
             }
 
             #ifndef HEADLESS
             cv::imshow("Camera Feed Rotated 180", frame);
-            cv::imshow("Black Line Mask", mask);
             cv::waitKey(1);
             #endif
 

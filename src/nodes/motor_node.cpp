@@ -1,5 +1,9 @@
 #include "../../include/nodes/motor_node.hpp"
 
+#define stop_speed 127
+#define base_speed 135
+#define error_coeff 0.05
+
 namespace nodes {
     MotorNode::MotorNode() : Node("motor_node") {
         motor_command_publisher_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>(
@@ -10,30 +14,37 @@ namespace nodes {
         line_error_subscriber_ = this->create_subscription<std_msgs::msg::Int8>(
             "/bpc_prp_robot/line_error",
             1,
-            std::bind(&MotorNode::on_error_line_bulish, this, std::placeholders::_1)
-        )
+            std::bind(&MotorNode::on_error_line, this, std::placeholders::_1)
+        );
+
+        line_found_subscriber_ = this->create_subscription<std_msgs::msg::Bool>(
+            "/bpc_prp_robot/line_found",
+            1,
+            std::bind(&MotorNode::on_line_found, this, std::placeholders::_1)
+        );
 
         timer_ = create_wall_timer(
-            std::chrono::milliseconds(10),
+            std::chrono::milliseconds(1),
             std::bind(&MotorNode::spin, this)
         );
     }
 
     void MotorNode::spin() const {
-        std_msgs::msg::UInt8MultiArray motor_command_msg;
+        #ifdef DEBUG
+        RCLCPP_INFO(this->get_logger(), "Publishing motor speeds - Left: %d, Right: %d", leftSpeed, rightSpeed);
+        #endif
         
-        motor_command_msg.data = {leftVector*128+127, leftVector*128+127};
+        std_msgs::msg::UInt8MultiArray motor_command_msg;
+        motor_command_msg.data = {enabled ? leftSpeed : stop_speed, enabled ? rightSpeed : stop_speed};
         motor_command_publisher_->publish(motor_command_msg);
     }
 
-    void MotorNode::on_error_line_bulish(const std_msgs::msg::Int8 msg){
-        if(msg>0){
-            leftVector = 1.0 - msg/127;
-            rightVector = 1.0;
-        }else{
-            leftVector = 1.0;
-            rightVector = 1.0 + msg/127;
-        }
-        RCLCPP_INFO(this->get_logger(), "L: %f R: %f", leftVector,rightVector);
+    void MotorNode::on_error_line(const std_msgs::msg::Int8 msg){
+        leftSpeed = std::clamp((uint8_t)(base_speed + msg.data*error_coeff), (uint8_t)base_speed, (uint8_t)255);
+        rightSpeed = std::clamp((uint8_t)(base_speed - msg.data*error_coeff), (uint8_t)base_speed, (uint8_t)255);
+    }
+
+    void MotorNode::on_line_found(const std_msgs::msg::Bool msg){
+        enabled = msg.data;
     }
 }
