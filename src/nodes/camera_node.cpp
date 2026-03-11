@@ -5,6 +5,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 
+#define HEADLESS
+
 namespace nodes {
     CameraNode::CameraNode() : Node("camera_node") {
         image_subscriber_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
@@ -17,7 +19,6 @@ namespace nodes {
     }
 
     void CameraNode::on_image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
-        bool headless = true; // Set to true to disable OpenCV windows (for headless operation)
         try
         {
             cv::Mat frame = cv_bridge::toCvCopy(msg, "bgr8")->image;
@@ -73,27 +74,31 @@ namespace nodes {
                         int cx = M.m10 / M.m00;
                         int cy = M.m01 / M.m00 + height*0.6; // adjust for ROI
 
-                        if (!headless) // Only draw if not in headless mode
+                        
+                        #ifndef HEADLESS
+                        // Move contour points back to original frame coordinates from ROI
+                        std::vector<cv::Point> contour_shifted;
+                        for (const auto &pt : contours[largest_index])
                         {
-                            // Move contour points back to original frame coordinates from ROI
-                            std::vector<cv::Point> contour_shifted;
-                            for (const auto &pt : contours[largest_index])
-                            {
-                                contour_shifted.push_back(cv::Point(pt.x, pt.y + roi_start_y));
-                            }
-
-                            // Draw the shifted contour on the full frame
-                            cv::drawContours(frame, std::vector<std::vector<cv::Point>>{contour_shifted}, 0, cv::Scalar(0,255,0), 3);
-                            cv::circle(frame, cv::Point(cx, cy), 8, cv::Scalar(0,0,255), -1);
-
-                            // Draw image center line
-                            cv::line(frame, cv::Point(width/2,0), cv::Point(width/2,height), cv::Scalar(255,0,0), 2);
+                            contour_shifted.push_back(cv::Point(pt.x, pt.y + roi_start_y));
                         }
+
+                        // Draw the shifted contour on the full frame
+                        cv::drawContours(frame, std::vector<std::vector<cv::Point>>{contour_shifted}, 0, cv::Scalar(0,255,0), 3);
+                        cv::circle(frame, cv::Point(cx, cy), 8, cv::Scalar(0,0,255), -1);
+
+                        // Draw image center line
+                        cv::line(frame, cv::Point(width/2,0), cv::Point(width/2,height), cv::Scalar(255,0,0), 2);
+                        #endif
+
                         int error = cx - width/2;
                         auto msg = std_msgs::msg::Int8();
                         msg.data = error;
                         line_error_publisher_->publish(msg);
+                        
+                        #ifndef HEADLESS
                         RCLCPP_INFO(this->get_logger(), "Line error published: %d", error);
+                        #endif
                     }
                 }
             }
@@ -102,10 +107,11 @@ namespace nodes {
                 RCLCPP_WARN(this->get_logger(), "Line not detected");
             }
 
-            if (headless) return; // Skip showing windows in headless mode
+            #ifndef HEADLESS
             cv::imshow("Camera Feed Rotated 180", frame);
             cv::imshow("Black Line Mask", mask);
             cv::waitKey(1);
+            #endif
 
         }
         catch (cv_bridge::Exception &e)

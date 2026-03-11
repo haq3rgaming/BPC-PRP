@@ -10,6 +10,9 @@ RUN groupadd --gid $USER_GID $USERNAME \
 # Add passwordless sudo for the user
 RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
+# Set ROS_DOMAIN_ID environment variable for the user
+ARG ROS_DOMAIN_ID=7
+
 # Install necessary packages (nano, ping, ip utils)
 RUN apt-get update && apt-get install -y \
     nano \
@@ -17,7 +20,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Add bashrc for the user
-RUN echo "export ROS_DOMAIN_ID=5" >> /home/$USERNAME/.bashrc
+RUN echo "export ROS_DOMAIN_ID=$ROS_DOMAIN_ID" >> /home/$USERNAME/.bashrc
 RUN echo "source /opt/ros/humble/setup.bash" >> /home/$USERNAME/.bashrc
 
 # Use default entrypoint and command

@@ -7,9 +7,8 @@ docker run -it \
   --env="MPLCONFIGDIR=/tmp/matplotlib" \
   --env="DISPLAY=$DISPLAY" \
   --env="QT_QPA_PLATFORM=xcb" \
-  --env="ROS_DOMAIN_ID=5" \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume="./:/home/ros/bpc-prp:rw" \
   --device /dev/dri \
   --group-add video \
-  ros2-vut #osrf/ros:humble-desktop
+  bpc-prp:latest #osrf/ros:humble-desktop
