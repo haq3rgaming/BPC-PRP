@@ -1,5 +1,7 @@
 FROM osrf/ros:humble-desktop
 
+ARG CODE_SERVER_VERSION=4.102.0
+
 # Create user with id 1000
 ARG USERNAME=ros
 ARG USER_UID=1000
@@ -16,8 +18,17 @@ ARG ROS_DOMAIN_ID=7
 # Install necessary packages (nano, ping, ip utils)
 RUN apt-get update && apt-get install -y \
     nano \
+    curl \
+    ca-certificates \
     ros-humble-image-transport-plugins \
     && rm -rf /var/lib/apt/lists/*
+
+# Preinstall VS Code Server (code-server)
+RUN curl -fsSL "https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server-${CODE_SERVER_VERSION}-linux-amd64.tar.gz" -o /tmp/code-server.tar.gz \
+    && tar -xzf /tmp/code-server.tar.gz -C /tmp \
+    && mv "/tmp/code-server-${CODE_SERVER_VERSION}-linux-amd64" /usr/lib/code-server \
+    && ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server \
+    && rm /tmp/code-server.tar.gz
 
 # Add bashrc for the user
 RUN echo "export ROS_DOMAIN_ID=$ROS_DOMAIN_ID" >> /home/$USERNAME/.bashrc
