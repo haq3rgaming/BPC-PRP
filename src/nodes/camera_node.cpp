@@ -1,9 +1,16 @@
 #include "../../include/nodes/camera_node.hpp"
 
+#include <string>
+
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/int8.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
+
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
+
 
 // #define HEADLESS
 // #define DEBUG
@@ -21,123 +28,162 @@ namespace nodes {
         RCLCPP_INFO(this->get_logger(), "CameraNode initialized and subscribed to /bpc_prp_robot/camera/compressed");
     }
 
+    cv::Mat CameraNode::preprocess_image(const cv::Mat& frame) {
+        cv::flip(frame, frame, -1);
+        cv::Mat hsv;
+        cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+        return hsv;
+    }
+
+    cv::Mat CameraNode::create_mask(const cv::Mat& hsv) {
+        cv::Mat mask;
+        cv::inRange(hsv, cv::Scalar(0,0,0), cv::Scalar(180,255,60), mask);
+        return mask;
+    }
+
+    void CameraNode::apply_morphology(cv::Mat& mask) {
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5));
+        cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
+        cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
+    }
+
+    cv::Mat CameraNode::get_roi(const cv::Mat& mask, int roi_start_y) {
+        return mask(cv::Rect(0, roi_start_y, mask.cols, mask.rows - roi_start_y));
+    } // TODO: pozriet ci to berie spodnu cast, lebo mam pocit ze to berie hornu cast obrazka
+
+    int CameraNode::find_largest_contour(const std::vector<std::vector<cv::Point>>& contours) {
+        double max_area = 0;
+        int largest_index = -1;
+        for (size_t i = 0; i < contours.size(); i++) {
+            double area = cv::contourArea(contours[i]);
+            if (area > max_area) {
+                max_area = area;
+                largest_index = i;
+            }
+        }
+        return largest_index;
+    }
+
+    int CameraNode::error_processor(int error) {
+        #ifdef PID
+        // --- PID Controller
+        static double integral = 0;
+        static double previous_error = 0;
+        double Kp = 0.1; // Proportional gain
+        double Ki = 0.01; // Integral gain
+        double Kd = 0.05; // Derivative gain
+
+        integral += error;
+        double derivative = error - previous_error;
+        double output = Kp * error + Ki * integral + Kd * derivative;
+        previous_error = error;
+        error = static_cast<int>(output);
+        #endif
+        return error;
+    }
+
+    void CameraNode::publish_line_error(int error) {
+        auto line_error_msg = std_msgs::msg::Int8();
+        line_error_msg.data = error;
+        line_error_publisher_->publish(line_error_msg);
+
+        #ifdef DEBUG
+        RCLCPP_INFO(this->get_logger(), "Line error published: %d", error);
+        #endif
+    }
+
+    void CameraNode::publish_line_found(bool found) {
+        auto line_found_msg = std_msgs::msg::Bool();
+        line_found_msg.data = found;
+        line_found_publisher_->publish(line_found_msg);
+
+        #ifdef DEBUG
+        RCLCPP_INFO(this->get_logger(), "Line found published: %s", found ? "true" : "false");
+        #endif
+    }
+
+    void CameraNode::publish_detection_warn(std::string msg) {
+        #ifdef DEBUG
+        RCLCPP_WARN(this->get_logger(), msg);
+        #endif
+
+        publish_line_error(0);
+        publish_line_found(false);
+    }
+
+    void CameraNode::draw_debug_info(cv::Mat& frame, const std::vector<cv::Point>& contour, int roi_start_y, cv::Point center) {
+        // Move contour points back to original frame coordinates from ROI
+        std::vector<cv::Point> contour_shifted;
+        for (const auto &pt : contour)
+        {
+            contour_shifted.push_back(cv::Point(pt.x, pt.y + roi_start_y));
+        }
+
+        // Draw the shifted contour on the full frame
+        cv::drawContours(frame, std::vector<std::vector<cv::Point>>{contour_shifted}, 0, cv::Scalar(0,255,0), 3);
+        cv::circle(frame, center, 8, cv::Scalar(0,0,255), -1);
+
+        // Draw image center line
+        cv::line(frame, cv::Point(frame.cols/2,0), cv::Point(frame.cols/2,frame.rows), cv::Scalar(255,0,0), 2);
+    }
+
     void CameraNode::on_image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
         try
         {
             cv::Mat frame = cv_bridge::toCvCopy(msg, "bgr8")->image;
-
-            // --- Rotate 180° (flip both axes)
-            cv::flip(frame, frame, -1);
-
             int height = frame.rows;
             int width = frame.cols;
 
-            // --- Convert to HSV
-            cv::Mat hsv;
-            cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+            // --- Rotate 180° (flip both axes) and convert to HSV
+            cv::Mat hsv = preprocess_image(frame);
 
             // --- Black color mask
-            cv::Mat mask;
-            cv::inRange(hsv, cv::Scalar(0,0,0), cv::Scalar(180,255,60), mask);
+            cv::Mat mask = create_mask(hsv);
 
             // --- Morphological filtering to remove noise
-            cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5));
-            cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
-            cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
+            apply_morphology(mask);
 
             // --- Focus on bottom 40% of the image
-            int roi_start_y = static_cast<int>(height * 0.6);
-            cv::Rect roi_rect(0, roi_start_y, width, height - roi_start_y);
-            cv::Mat roi = mask(roi_rect);
+            int roi_start_y = static_cast<int>(height * 0.6); //TODO: pozriet rovnako ako pri funkcii get_roi
+            cv::Mat roi = get_roi(mask, roi_start_y); //TODO: mozno prerobit na definiciu roi ako x,y,w,h a tak s tym robit dalej, nie len ako jeden value
 
             // --- Find contours
             std::vector<std::vector<cv::Point>> contours;
             cv::findContours(roi, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-            if (!contours.empty())
-            {
-                // Find largest contour
-                double max_area = 0;
-                int largest_index = -1;
-                for (size_t i = 0; i < contours.size(); i++)
-                {
-                    double area = cv::contourArea(contours[i]);
-                    if (area > max_area)
-                    {
-                        max_area = area;
-                        largest_index = i;
-                    }
-                }
-
-                if (largest_index >= 0)
-                {
-                    cv::Moments M = cv::moments(contours[largest_index]);
-                    if (M.m00 > 0)
-                    {
-                        int cx = M.m10 / M.m00;
-                        int cy = M.m01 / M.m00 + height*0.6; // adjust for ROI
-
-                        auto line_found_msg = std_msgs::msg::Bool();
-                        line_found_msg.data = true;
-                        line_found_publisher_->publish(line_found_msg);
-
-                        #ifndef HEADLESS
-                        // Move contour points back to original frame coordinates from ROI
-                        std::vector<cv::Point> contour_shifted;
-                        for (const auto &pt : contours[largest_index])
-                        {
-                            contour_shifted.push_back(cv::Point(pt.x, pt.y + roi_start_y));
-                        }
-
-                        // Draw the shifted contour on the full frame
-                        cv::drawContours(frame, std::vector<std::vector<cv::Point>>{contour_shifted}, 0, cv::Scalar(0,255,0), 3);
-                        cv::circle(frame, cv::Point(cx, cy), 8, cv::Scalar(0,0,255), -1);
-
-                        // Draw image center line
-                        cv::line(frame, cv::Point(width/2,0), cv::Point(width/2,height), cv::Scalar(255,0,0), 2);
-                        #endif
-                        
-                        #ifndef PID
-                        int error = cx - width/2;
-                        #else
-                        // --- PID Controller
-                        static double integral = 0;
-                        static double previous_error = 0;
-                        double Kp = 0.1; // Proportional gain
-                        double Ki = 0.01; // Integral gain
-                        double Kd = 0.05; // Derivative gain
-
-                        int error = cx - width/2;
-                        integral += error;
-                        double derivative = error - previous_error;
-                        double output = Kp * error + Ki * integral + Kd * derivative;
-                        previous_error = error;
-                        error = static_cast<int>(output);
-                        #endif
-
-                        auto msg = std_msgs::msg::Int8();
-                        msg.data = std::clamp(error, -128, 127); // Ensure error fits in int8
-                        line_error_publisher_->publish(msg);
-                        
-                        #ifdef DEBUG
-                        RCLCPP_INFO(this->get_logger(), "Line error published: %d", error);
-                        #endif
-                    }
-                }
+            
+            if (contours.empty()) {
+                publish_detection_warn("Line not detected");
+                return;
             }
-            else
-            {
-                #ifdef DEBUG
-                RCLCPP_WARN(this->get_logger(), "Line not detected");
-                #endif
 
-                auto line_found_msg = std_msgs::msg::Bool();
-                line_found_msg.data = false;
-                line_found_publisher_->publish(line_found_msg);
+            int largest_index = find_largest_contour(contours);
+            if (largest_index < 0)
+            {
+                publish_detection_warn("No valid contours found");
+                return;
             }
+
+            auto contour = contours[largest_index];
+            cv::Moments M = cv::moments(contour);
+            if (M.m00 <= 0)
+            {
+                publish_detection_warn("Contour has zero area");
+                return;
+            }
+
+            int cx = M.m10 / M.m00;
+            int cy = M.m01 / M.m00 + roi_start_y; // adjust for ROI
 
             #ifndef HEADLESS
-            cv::imshow("Camera Feed Rotated 180", frame);
+            draw_debug_info(frame, contour, roi_start_y, cv::Point(cx, cy));
+            #endif
+
+            int error = std::clamp(error_processor(cx - width/2), -128, 127); // Ensure error fits in int8
+            publish_line_error(error);
+            publish_line_found(true);
+
+            #ifndef HEADLESS
+            cv::imshow("Camera Feed", frame);
             cv::waitKey(1);
             #endif
 
