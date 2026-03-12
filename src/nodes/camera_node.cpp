@@ -51,6 +51,12 @@ namespace nodes {
         return mask(cv::Rect(0, roi_start_y, mask.cols, mask.rows - roi_start_y));
     } // TODO: pozriet ci to berie spodnu cast, lebo mam pocit ze to berie hornu cast obrazka
 
+    std::vector<std::vector<cv::Point>> CameraNode::find_contours(const cv::Mat& roi) {
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(roi, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        return contours;
+    }
+
     int CameraNode::find_largest_contour(const std::vector<std::vector<cv::Point>>& contours) {
         double max_area = 0;
         int largest_index = -1;
@@ -148,9 +154,7 @@ namespace nodes {
             cv::Mat roi = get_roi(mask, roi_start_y); //TODO: mozno prerobit na definiciu roi ako x,y,w,h a tak s tym robit dalej, nie len ako jeden value
 
             // --- Find contours
-            std::vector<std::vector<cv::Point>> contours;
-            cv::findContours(roi, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-            
+            std::vector<std::vector<cv::Point>> contours = find_contours(roi);
             if (contours.empty()) {
                 publish_detection_warn("Line not detected");
                 return;
