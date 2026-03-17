@@ -2,9 +2,11 @@
 
 #define stop_speed 127
 #define base_speed 135
-#define error_coeff 0.05
+#define Kp 0.1
+#define Ki 0.01
+#define Kd 0.05
 
-// #define PID
+#define PID
 
 namespace nodes {
     MotorNode::MotorNode() : Node("motor_node") {
@@ -45,22 +47,17 @@ namespace nodes {
         int error = msg.data;
 
         #ifdef PID
-        // --- PID Controller
-        static double integral = 0;
-        static double previous_error = 0;
-        double Kp = 0.1; // Proportional gain
-        double Ki = 0.01; // Integral gain
-        double Kd = 0.05; // Derivative gain
-
         integral += error;
         double derivative = error - previous_error;
         double output = Kp * error + Ki * integral + Kd * derivative;
         previous_error = error;
         error = static_cast<int>(output);
+        #else
+        error = error * Kp;
         #endif
 
-        leftSpeed = std::clamp((uint8_t)(base_speed + error*error_coeff), (uint8_t)base_speed, (uint8_t)255);
-        rightSpeed = std::clamp((uint8_t)(base_speed - error*error_coeff), (uint8_t)base_speed, (uint8_t)255);
+        leftSpeed = std::clamp((uint8_t)(base_speed + error), (uint8_t)base_speed, (uint8_t)255);
+        rightSpeed = std::clamp((uint8_t)(base_speed - error), (uint8_t)base_speed, (uint8_t)255);
     }
 
     void MotorNode::on_line_found(const std_msgs::msg::Bool msg){

@@ -22,5 +22,8 @@ namespace nodes {
         uint8_t rightSpeed{0};
         uint8_t leftSpeed{0};
         bool enabled{false};
+
+        double integral = 0;
+        double previous_error = 0;
     };
 }
