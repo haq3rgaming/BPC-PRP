@@ -89,9 +89,9 @@ namespace nodes {
         #endif
     }
 
-    void CameraNode::publish_detection_warn(std::string msg) {
+    void CameraNode::publish_detection_warn(const std::string& msg) {
         #ifdef DEBUG
-        RCLCPP_WARN(this->get_logger(), msg);
+        RCLCPP_WARN(this->get_logger(), msg.c_str());
         #endif
 
         publish_line_error(0);
@@ -163,7 +163,7 @@ namespace nodes {
             draw_debug_info(frame, contour, roi_start_y, cv::Point(cx, cy));
             #endif
 
-            int error = std::clamp(cx - width/2, -128, 127); // Ensure error fits in int8
+            int error = std::clamp((int)((cx - width/2)*0.5), -128, 127); // Ensure error fits in int8
             publish_line_error(error);
             publish_line_found(true);
 

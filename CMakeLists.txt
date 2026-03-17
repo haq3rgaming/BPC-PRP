@@ -15,10 +15,6 @@ find_package(OpenCV REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(visualization_msgs REQUIRED)
 
-set(SRC
-    ${CMAKE_SOURCE_DIR}/src/example.cpp
-)
-
 set(AMENT_LIBS rclcpp std_msgs sensor_msgs cv_bridge image_transport)
 
 add_executable(${PROJECT_NAME} src/main.cpp src/nodes/io_node.cpp src/nodes/motor_node.cpp src/nodes/camera_node.cpp ${SRC})
@@ -33,5 +29,3 @@ ament_target_dependencies(${PROJECT_NAME} rclcpp std_msgs sensor_msgs cv_bridge 
 
 install(TARGETS ${PROJECT_NAME} DESTINATION lib/${PROJECT_NAME})
 ament_package()
-
-add_subdirectory(tests)

@@ -29,7 +29,7 @@ namespace nodes {
 
         void publish_line_error(int error);
         void publish_line_found(bool found);
-        void publish_detection_warn(std::string msg);
+        void publish_detection_warn(const std::string& msg);
 
         void draw_debug_info(cv::Mat& frame, const std::vector<cv::Point>& contour, int roi_start_y, cv::Point center);
     };
