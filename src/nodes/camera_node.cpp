@@ -3,7 +3,7 @@
 #include <string>
 
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/int8.hpp>
+#include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 
@@ -15,6 +15,9 @@
 // #define HEADLESS
 // #define DEBUG
 
+#define AREA_THRESHOLD 500
+#define ERROR_NORMALIZATION_FACTOR 0.3
+
 namespace nodes {
     CameraNode::CameraNode() : Node("camera_node") {
         image_subscriber_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
@@ -22,13 +25,16 @@ namespace nodes {
             1,
             std::bind(&CameraNode::on_image_callback, this, std::placeholders::_1)
         );
-        line_error_publisher_ = this->create_publisher<std_msgs::msg::Int8>("/bpc_prp_robot/line_error", 1);
+        line_error_publisher_ = this->create_publisher<std_msgs::msg::Float64>("/bpc_prp_robot/line_error", 1);
         line_found_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/bpc_prp_robot/line_found", 1);
         RCLCPP_INFO(this->get_logger(), "CameraNode initialized and subscribed to /bpc_prp_robot/camera/compressed");
     }
 
-    cv::Mat CameraNode::preprocess_image(const cv::Mat& frame) {
+    void CameraNode::flip_image(cv::Mat& frame) {
         cv::flip(frame, frame, -1);
+    }
+
+    cv::Mat CameraNode::convert_to_hsv(const cv::Mat& frame) {
         cv::Mat hsv;
         cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
         return hsv;
@@ -69,13 +75,13 @@ namespace nodes {
         return largest_index;
     }
 
-    void CameraNode::publish_line_error(int error) {
-        auto line_error_msg = std_msgs::msg::Int8();
-        line_error_msg.data = error;
+    void CameraNode::publish_line_error(double error) {
+        auto line_error_msg = std_msgs::msg::Float64();
+        line_error_msg.data = error * ERROR_NORMALIZATION_FACTOR;
         line_error_publisher_->publish(line_error_msg);
 
         #ifdef DEBUG
-        RCLCPP_INFO(this->get_logger(), "Line error published: %d", error);
+        RCLCPP_INFO(this->get_logger(), "Line error published: %f", error);
         #endif
     }
 
@@ -98,6 +104,55 @@ namespace nodes {
         publish_line_found(false);
     }
 
+    void CameraNode::process_camera_frame(cv::Mat& frame) {
+        int height = frame.rows;
+        int width = frame.cols;
+
+        cv::Mat hsv = convert_to_hsv(frame);
+        cv::Mat mask = create_mask(hsv);
+        apply_morphology(mask);
+
+        // --- Focus on bottom 40% of the image
+        int roi_start_y = static_cast<int>(height * 0.6); //TODO: pozriet rovnako ako pri funkcii get_roi
+        cv::Mat roi = get_roi(mask, roi_start_y); //TODO: mozno prerobit na definiciu roi ako x,y,w,h a tak s tym robit dalej, nie len ako jeden value
+
+        std::vector<std::vector<cv::Point>> contours = find_contours(roi);
+        if (contours.empty()) {
+            publish_detection_warn("Line not detected");
+            return;
+        }
+
+        int largest_index = find_largest_contour(contours);
+        if (largest_index < 0)
+        {
+            publish_detection_warn("No valid contours found");
+            return;
+        }
+
+        auto contour = contours[largest_index];
+        cv::Moments M = cv::moments(contour);
+        if (M.m00 <= AREA_THRESHOLD)
+        {
+            publish_detection_warn("No contour meets area threshold");
+            return;
+        }
+
+        #ifdef DEBUG
+        RCLCPP_INFO(this->get_logger(), "Largest contour area: %f", M.m00);
+        #endif
+
+        int cx = M.m10 / M.m00;
+        int cy = M.m01 / M.m00 + roi_start_y; // adjust for ROI
+
+        #ifndef HEADLESS
+        draw_debug_info(frame, contour, roi_start_y, cv::Point(cx, cy));
+        #endif
+
+        double error = (cx - width/2);
+        publish_line_error(error);
+        publish_line_found(true);
+    }
+
     void CameraNode::draw_debug_info(cv::Mat& frame, const std::vector<cv::Point>& contour, int roi_start_y, cv::Point center) {
         // Move contour points back to original frame coordinates from ROI
         std::vector<cv::Point> contour_shifted;
@@ -118,55 +173,9 @@ namespace nodes {
         try
         {
             cv::Mat frame = cv_bridge::toCvCopy(msg, "bgr8")->image;
-            int height = frame.rows;
-            int width = frame.cols;
-
-            // --- Rotate 180° (flip both axes) and convert to HSV
-            cv::Mat hsv = preprocess_image(frame);
-
-            // --- Black color mask
-            cv::Mat mask = create_mask(hsv);
-
-            // --- Morphological filtering to remove noise
-            apply_morphology(mask);
-
-            // --- Focus on bottom 40% of the image
-            int roi_start_y = static_cast<int>(height * 0.6); //TODO: pozriet rovnako ako pri funkcii get_roi
-            cv::Mat roi = get_roi(mask, roi_start_y); //TODO: mozno prerobit na definiciu roi ako x,y,w,h a tak s tym robit dalej, nie len ako jeden value
-
-            // --- Find contours
-            std::vector<std::vector<cv::Point>> contours = find_contours(roi);
-            if (contours.empty()) {
-                publish_detection_warn("Line not detected");
-                return;
-            }
-
-            int largest_index = find_largest_contour(contours);
-            if (largest_index < 0)
-            {
-                publish_detection_warn("No valid contours found");
-                return;
-            }
-
-            auto contour = contours[largest_index];
-            cv::Moments M = cv::moments(contour);
-            if (M.m00 <= 0)
-            {
-                publish_detection_warn("Contour has zero area");
-                return;
-            }
-
-            int cx = M.m10 / M.m00;
-            int cy = M.m01 / M.m00 + roi_start_y; // adjust for ROI
-
-            #ifndef HEADLESS
-            draw_debug_info(frame, contour, roi_start_y, cv::Point(cx, cy));
-            #endif
-
-            int error = std::clamp((int)((cx - width/2)*0.5), -128, 127); // Ensure error fits in int8
-            publish_line_error(error);
-            publish_line_found(true);
-
+            flip_image(frame);
+            process_camera_frame(frame);
+            
             #ifndef HEADLESS
             cv::imshow("Camera Feed", frame);
             cv::waitKey(1);

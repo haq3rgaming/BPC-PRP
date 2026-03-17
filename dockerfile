@@ -13,7 +13,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
 RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Set ROS_DOMAIN_ID environment variable for the user
-ARG ROS_DOMAIN_ID=5
+ARG ROS_DOMAIN_ID=7
 
 # Install necessary packages (nano, ping, ip utils)
 RUN apt-get update && apt-get install -y \
