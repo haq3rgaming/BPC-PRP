@@ -1,7 +1,8 @@
 #include "../../include/nodes/motor_node.hpp"
 
-#define stop_speed 127
-#define base_speed 135
+#define stop_speed 127.0
+#define base_forward_speed 135.0
+
 #define Kp 0.1
 #define Ki 0.01
 #define Kd 0.05
@@ -39,25 +40,24 @@ namespace nodes {
         #endif
         
         std_msgs::msg::UInt8MultiArray motor_command_msg;
-        motor_command_msg.data = {enabled ? leftSpeed : stop_speed, enabled ? rightSpeed : stop_speed};
+        motor_command_msg.data = {enabled ? (uint8_t)leftSpeed : stop_speed, enabled ? (uint8_t)rightSpeed : stop_speed};
         motor_command_publisher_->publish(motor_command_msg);
     }
 
     void MotorNode::on_error_line(const std_msgs::msg::Int8 msg){
-        int error = msg.data;
+        double error = (double)msg.data;
 
         #ifdef PID
         integral += error;
         double derivative = error - previous_error;
         double output = Kp * error + Ki * integral + Kd * derivative;
         previous_error = error;
-        error = static_cast<int>(output);
         #else
-        error = error * Kp;
+        output = error * Kp;
         #endif
 
-        leftSpeed = std::clamp((uint8_t)(base_speed + error), (uint8_t)base_speed, (uint8_t)255);
-        rightSpeed = std::clamp((uint8_t)(base_speed - error), (uint8_t)base_speed, (uint8_t)255);
+        leftSpeed = std::clamp(base_forward_speed + output, base_forward_speed, 255.0);
+        rightSpeed = std::clamp(base_forward_speed - output, base_forward_speed, 255.0);
     }
 
     void MotorNode::on_line_found(const std_msgs::msg::Bool msg){

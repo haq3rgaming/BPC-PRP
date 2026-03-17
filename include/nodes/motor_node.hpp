@@ -19,8 +19,8 @@ namespace nodes {
         rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr line_found_subscriber_;
         rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr motor_command_publisher_;
         rclcpp::TimerBase::SharedPtr timer_;
-        uint8_t rightSpeed{0};
-        uint8_t leftSpeed{0};
+        double rightSpeed{0};
+        double leftSpeed{0};
         bool enabled{false};
 
         double integral = 0;
