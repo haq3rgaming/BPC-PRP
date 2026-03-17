@@ -14,7 +14,6 @@
 
 // #define HEADLESS
 // #define DEBUG
-// #define PID
 
 namespace nodes {
     CameraNode::CameraNode() : Node("camera_node") {
@@ -68,24 +67,6 @@ namespace nodes {
             }
         }
         return largest_index;
-    }
-
-    int CameraNode::error_processor(int error) {
-        #ifdef PID
-        // --- PID Controller
-        static double integral = 0;
-        static double previous_error = 0;
-        double Kp = 0.1; // Proportional gain
-        double Ki = 0.01; // Integral gain
-        double Kd = 0.05; // Derivative gain
-
-        integral += error;
-        double derivative = error - previous_error;
-        double output = Kp * error + Ki * integral + Kd * derivative;
-        previous_error = error;
-        error = static_cast<int>(output);
-        #endif
-        return error;
     }
 
     void CameraNode::publish_line_error(int error) {
@@ -182,7 +163,7 @@ namespace nodes {
             draw_debug_info(frame, contour, roi_start_y, cv::Point(cx, cy));
             #endif
 
-            int error = std::clamp(error_processor(cx - width/2), -128, 127); // Ensure error fits in int8
+            int error = std::clamp(cx - width/2, -128, 127); // Ensure error fits in int8
             publish_line_error(error);
             publish_line_found(true);
 

@@ -26,7 +26,6 @@ namespace nodes {
         cv::Mat get_roi(const cv::Mat& mask, int roi_start_y);
         std::vector<std::vector<cv::Point>> find_contours(const cv::Mat& roi);
         int find_largest_contour(const std::vector<std::vector<cv::Point>>& contours);
-        int error_processor(int error);
 
         void publish_line_error(int error);
         void publish_line_found(bool found);

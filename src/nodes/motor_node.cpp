@@ -4,6 +4,8 @@
 #define base_speed 135
 #define error_coeff 0.05
 
+// #define PID
+
 namespace nodes {
     MotorNode::MotorNode() : Node("motor_node") {
         motor_command_publisher_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>(
@@ -40,8 +42,25 @@ namespace nodes {
     }
 
     void MotorNode::on_error_line(const std_msgs::msg::Int8 msg){
-        leftSpeed = std::clamp((uint8_t)(base_speed + msg.data*error_coeff), (uint8_t)base_speed, (uint8_t)255);
-        rightSpeed = std::clamp((uint8_t)(base_speed - msg.data*error_coeff), (uint8_t)base_speed, (uint8_t)255);
+        int error = msg.data;
+
+        #ifdef PID
+        // --- PID Controller
+        static double integral = 0;
+        static double previous_error = 0;
+        double Kp = 0.1; // Proportional gain
+        double Ki = 0.01; // Integral gain
+        double Kd = 0.05; // Derivative gain
+
+        integral += error;
+        double derivative = error - previous_error;
+        double output = Kp * error + Ki * integral + Kd * derivative;
+        previous_error = error;
+        error = static_cast<int>(output);
+        #endif
+
+        leftSpeed = std::clamp((uint8_t)(base_speed + error*error_coeff), (uint8_t)base_speed, (uint8_t)255);
+        rightSpeed = std::clamp((uint8_t)(base_speed - error*error_coeff), (uint8_t)base_speed, (uint8_t)255);
     }
 
     void MotorNode::on_line_found(const std_msgs::msg::Bool msg){
