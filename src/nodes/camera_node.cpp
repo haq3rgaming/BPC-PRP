@@ -16,7 +16,17 @@
 // #define DEBUG
 
 #define AREA_THRESHOLD 500
-#define ERROR_NORMALIZATION_FACTOR 0.3
+#define ERROR_NORMALIZATION_FACTOR 0.3 // toto by sa malo nastavit dynamicky podla ROI, aby hodnoty boli +-100
+
+#define ROI_START_X 0.1
+#define ROI_START_Y 0.5
+#define ROI_END_X 0.9
+#define ROI_END_Y 1.0
+
+#define ROI_RECT_COLOR cv::Scalar(0,255,0)
+#define CONTOUR_COLOR cv::Scalar(0,0,255)
+#define CENTER_COLOR cv::Scalar(255,0,0)
+#define CENTER_LINE_COLOR cv::Scalar(255,0,255)
 
 namespace nodes {
     CameraNode::CameraNode() : Node("camera_node") {
@@ -28,6 +38,11 @@ namespace nodes {
         line_error_publisher_ = this->create_publisher<std_msgs::msg::Float64>("/bpc_prp_robot/line_error", 1);
         line_found_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/bpc_prp_robot/line_found", 1);
         RCLCPP_INFO(this->get_logger(), "CameraNode initialized and subscribed to /bpc_prp_robot/camera/compressed");
+    
+        roi_start_x_ = ROI_START_X;
+        roi_start_y_ = ROI_START_Y;
+        roi_end_x_ = ROI_END_X;
+        roi_end_y_ = ROI_END_Y;
     }
 
     void CameraNode::flip_image(cv::Mat& frame) {
@@ -52,9 +67,9 @@ namespace nodes {
         cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
     }
 
-    cv::Mat CameraNode::get_roi(const cv::Mat& mask, int roi_start_y) {
-        return mask(cv::Rect(0, roi_start_y, mask.cols, mask.rows - roi_start_y));
-    } // TODO: pozriet ci to berie spodnu cast, lebo mam pocit ze to berie hornu cast obrazka
+    cv::Rect CameraNode::create_roi_rect(const cv::Mat& mask, float start_x, float start_y, float end_x, float end_y) {
+        return cv::Rect(mask.cols * start_x, mask.rows * start_y, mask.cols * end_x, mask.rows * end_y);
+    }
 
     std::vector<std::vector<cv::Point>> CameraNode::find_contours(const cv::Mat& roi) {
         std::vector<std::vector<cv::Point>> contours;
@@ -105,18 +120,12 @@ namespace nodes {
     }
 
     void CameraNode::process_camera_frame(cv::Mat& frame) {
-        int height = frame.rows;
-        int width = frame.cols;
-
         cv::Mat hsv = convert_to_hsv(frame);
         cv::Mat mask = create_mask(hsv);
         apply_morphology(mask);
-
-        // --- Focus on bottom 40% of the image
-        int roi_start_y = static_cast<int>(height * 0.6); //TODO: pozriet rovnako ako pri funkcii get_roi
-        cv::Mat roi = get_roi(mask, roi_start_y); //TODO: mozno prerobit na definiciu roi ako x,y,w,h a tak s tym robit dalej, nie len ako jeden value
-
-        std::vector<std::vector<cv::Point>> contours = find_contours(roi);
+        
+        cv::Rect roiRect = create_roi_rect(mask, roi_start_x_, roi_start_y_, roi_end_x_, roi_end_y_);
+        std::vector<std::vector<cv::Point>> contours = find_contours(mask(roiRect));
         if (contours.empty()) {
             publish_detection_warn("Line not detected");
             return;
@@ -141,32 +150,32 @@ namespace nodes {
         RCLCPP_INFO(this->get_logger(), "Largest contour area: %f", M.m00);
         #endif
 
-        int cx = M.m10 / M.m00;
-        int cy = M.m01 / M.m00 + roi_start_y; // adjust for ROI
+        cv::Point center = cv::Point(M.m10 / M.m00 + roiRect.x, M.m01 / M.m00 + roiRect.y);
 
         #ifndef HEADLESS
-        draw_debug_info(frame, contour, roi_start_y, cv::Point(cx, cy));
+        draw_debug_info(frame, contour, roiRect, center);
         #endif
 
-        double error = (cx - width/2);
+        double error = (center.x - frame.cols/2);
         publish_line_error(error);
         publish_line_found(true);
     }
 
-    void CameraNode::draw_debug_info(cv::Mat& frame, const std::vector<cv::Point>& contour, int roi_start_y, cv::Point center) {
+    void CameraNode::draw_debug_info(cv::Mat& frame, const std::vector<cv::Point>& contour, cv::Rect roiRect, cv::Point center) {
         // Move contour points back to original frame coordinates from ROI
         std::vector<cv::Point> contour_shifted;
         for (const auto &pt : contour)
-        {
-            contour_shifted.push_back(cv::Point(pt.x, pt.y + roi_start_y));
-        }
+            contour_shifted.push_back(cv::Point(pt.x + roiRect.x, pt.y + roiRect.y));
+
+        // Draw the ROI rectangle
+        cv::rectangle(frame, roiRect, ROI_RECT_COLOR, 2);
 
         // Draw the shifted contour on the full frame
-        cv::drawContours(frame, std::vector<std::vector<cv::Point>>{contour_shifted}, 0, cv::Scalar(0,255,0), 3);
-        cv::circle(frame, center, 8, cv::Scalar(0,0,255), -1);
+        cv::drawContours(frame, std::vector<std::vector<cv::Point>>{contour_shifted}, 0, CONTOUR_COLOR, 3);
+        cv::circle(frame, center, 8, CENTER_COLOR, -1);
 
         // Draw image center line
-        cv::line(frame, cv::Point(frame.cols/2,0), cv::Point(frame.cols/2,frame.rows), cv::Scalar(255,0,0), 2);
+        cv::line(frame, cv::Point(frame.cols/2,0), cv::Point(frame.cols/2,frame.rows), CENTER_LINE_COLOR, 2);
     }
 
     void CameraNode::on_image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
