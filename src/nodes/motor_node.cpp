@@ -3,11 +3,12 @@
 #define stop_speed 127.0
 #define base_forward_speed 150.0
 
-#define Kp 0.1
+#define Kp 0.15
 #define Ki 0.01
 #define Kd 0.01
 
 #define PID
+#define PID_STRENGTH 1.0
 
 namespace nodes {
     MotorNode::MotorNode() : Node("motor_node") {
@@ -57,8 +58,8 @@ namespace nodes {
         double output = error * Kp;
         #endif
 
-        leftSpeed = std::clamp(base_forward_speed + output, stop_speed, 255.0);
-        rightSpeed = std::clamp(base_forward_speed - output, stop_speed, 255.0);
+        leftSpeed = std::clamp(base_forward_speed + output*PID_STRENGTH, stop_speed, 255.0);
+        rightSpeed = std::clamp(base_forward_speed - output*PID_STRENGTH, stop_speed, 255.0);
     }
 
     void MotorNode::on_line_found(const std_msgs::msg::Bool msg){

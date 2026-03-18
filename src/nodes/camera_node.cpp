@@ -18,9 +18,9 @@
 #define AREA_THRESHOLD 500
 #define ERROR_NORMALIZATION_FACTOR 0.3 // toto by sa malo nastavit dynamicky podla ROI, aby hodnoty boli +-100
 
-#define ROI_START_X 0.1
-#define ROI_START_Y 0.5
-#define ROI_END_X 0.9
+#define ROI_START_X 0.0
+#define ROI_START_Y 0.4
+#define ROI_END_X 1.0
 #define ROI_END_Y 1.0
 
 #define ROI_RECT_COLOR cv::Scalar(0,255,0)
@@ -68,7 +68,7 @@ namespace nodes {
     }
 
     cv::Rect CameraNode::create_roi_rect(const cv::Mat& mask, float start_x, float start_y, float end_x, float end_y) {
-        return cv::Rect(mask.cols * start_x, mask.rows * start_y, mask.cols * end_x, mask.rows * end_y);
+        return cv::Rect(mask.cols * start_x, mask.rows * start_y, mask.cols * (end_x - start_x), mask.rows * (end_y - start_y));
     }
 
     std::vector<std::vector<cv::Point>> CameraNode::find_contours(const cv::Mat& roi) {

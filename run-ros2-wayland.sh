@@ -1,7 +1,10 @@
 #!/bin/bash
 
+xhost +local:docker
+
 docker run -it \
   --network=host \
+  --ipc=host \
   --user $(id -u):$(id -g) \
   --env="XDG_RUNTIME_DIR=/tmp/runtime" \
   --env="MPLCONFIGDIR=/tmp/matplotlib" \
@@ -11,4 +14,4 @@ docker run -it \
   --volume="./:/home/ros/bpc-prp:rw" \
   --device /dev/dri \
   --group-add video \
-  bpc-prp:latest #osrf/ros:humble-desktop
+  bpc-prp:latest
