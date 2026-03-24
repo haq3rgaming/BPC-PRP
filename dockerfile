@@ -23,14 +23,6 @@ RUN apt-get update && apt-get install -y \
     ros-humble-image-transport-plugins \
     && rm -rf /var/lib/apt/lists/*
 
-# Preinstall VS Code Server (code-server)
-# RUN curl -fsSL "https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server-${CODE_SERVER_VERSION}-linux-amd64.tar.gz" -o /tmp/code-server.tar.gz \
-#     && tar -xzf /tmp/code-server.tar.gz -C /tmp \
-#     && mv "/tmp/code-server-${CODE_SERVER_VERSION}-linux-amd64" /home/$USERNAME/.vscode-server \
-#     && chown -R $USERNAME:$USERNAME /home/$USERNAME/.vscode-server \
-#     && ln -s /home/$USERNAME/.vscode-server/bin/code-server /usr/bin/code-server \
-#     && rm /tmp/code-server.tar.gz
-
 # Add bashrc for the user
 RUN echo "export ROS_DOMAIN_ID=$ROS_DOMAIN_ID" >> /home/$USERNAME/.bashrc
 RUN echo "source /opt/ros/humble/setup.bash" >> /home/$USERNAME/.bashrc
