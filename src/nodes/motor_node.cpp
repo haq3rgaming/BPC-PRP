@@ -3,7 +3,7 @@
 #define stop_speed 127.0
 #define base_forward_speed 150.0
 
-#define Kp 0.15
+#define Kp 0.1
 #define Ki 0.01
 #define Kd 0.01
 
