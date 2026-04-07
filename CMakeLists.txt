@@ -17,7 +17,7 @@ find_package(visualization_msgs REQUIRED)
 
 set(AMENT_LIBS rclcpp std_msgs sensor_msgs cv_bridge image_transport)
 
-add_executable(${PROJECT_NAME} src/main.cpp src/nodes/io_node.cpp src/nodes/motor_node.cpp src/nodes/camera_node.cpp src/nodes/lidar_node.cpp ${SRC})
+add_executable(${PROJECT_NAME} src/main.cpp src/nodes/io_node.cpp src/nodes/motor_node.cpp src/nodes/camera_node.cpp src/nodes/lidar_node.cpp src/nodes/aruco_node.cpp ${SRC})
 target_include_directories(${PROJECT_NAME} PUBLIC
         include
         ${OpenCV_INCLUDE_DIRS}
