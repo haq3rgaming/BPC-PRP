@@ -14,16 +14,16 @@ int main(int argc, char* argv[]) {
     
     // Create nodes
     //auto motor_node = std::make_shared<nodes::MotorNode>();
-    auto aruco_node = std::make_shared<nodes::ArucoNode>();
-    //auto lidar_node = std::make_shared<nodes::LidarNode>();
+    //auto aruco_node = std::make_shared<nodes::ArucoNode>();
+    auto lidar_node = std::make_shared<nodes::LidarNode>();
 
     // Create an executor (for handling multiple nodes)
     auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
     
     // Add nodes to the executor
     //executor->add_node(motor_node);
-    executor->add_node(aruco_node);
-    //executor->add_node(lidar_node);
+    //executor->add_node(aruco_node);
+    executor->add_node(lidar_node);
 
     // Run the executor (handles callbacks for both nodes)
     executor->spin();
