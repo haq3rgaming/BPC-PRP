@@ -4,6 +4,7 @@
 #include "../include/nodes/motor_node.hpp"
 #include "../include/nodes/aruco_node.hpp"
 #include "../include/nodes/lidar_node.hpp"
+#include "../include/nodes/imu_node.hpp"
 
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
@@ -16,6 +17,7 @@ int main(int argc, char* argv[]) {
     //auto motor_node = std::make_shared<nodes::MotorNode>();
     //auto aruco_node = std::make_shared<nodes::ArucoNode>();
     auto lidar_node = std::make_shared<nodes::LidarNode>();
+    auto imu_node = std::make_shared<nodes::ImuNode>();
 
     // Create an executor (for handling multiple nodes)
     auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
@@ -24,7 +26,7 @@ int main(int argc, char* argv[]) {
     //executor->add_node(motor_node);
     //executor->add_node(aruco_node);
     executor->add_node(lidar_node);
-
+    executor->add_node(imu_node);
     // Run the executor (handles callbacks for both nodes)
     executor->spin();
 
