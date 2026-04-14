@@ -3,7 +3,7 @@
 #include <string>
 
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 
@@ -22,7 +22,7 @@ namespace nodes {
             1,
             std::bind(&ArucoNode::on_image_callback, this, std::placeholders::_1)
         );
-        marker_data_publisher_ = this->create_publisher<std_msgs::msg::Int32>("/bpc_prp_robot/marker_data", 1);
+        marker_data_publisher_ = this->create_publisher<std_msgs::msg::UInt8>("/bpc_prp_robot/marker_data", 1);
         marker_found_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/bpc_prp_robot/marker_found", 1);
         RCLCPP_INFO(this->get_logger(), "ArucoNode initialized and subscribed to /bpc_prp_robot/camera/compressed");
     }
@@ -62,7 +62,7 @@ namespace nodes {
     }
 
     void ArucoNode::publish_marker_data(int data) {
-        auto marker_data_msg = std_msgs::msg::Int32();
+        auto marker_data_msg = std_msgs::msg::UInt8();
         marker_data_msg.data = data;
         marker_data_publisher_->publish(marker_data_msg);
 

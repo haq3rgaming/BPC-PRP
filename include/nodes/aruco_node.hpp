@@ -3,7 +3,7 @@
 #include <string>
 
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 
@@ -26,7 +26,7 @@ namespace nodes {
 
 
         rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscriber_;
-        rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr marker_data_publisher_;
+        rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr marker_data_publisher_;
         rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr marker_found_publisher_;
         void on_image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
 
