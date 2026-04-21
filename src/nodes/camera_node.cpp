@@ -1,4 +1,4 @@
-#include "../../include/nodes/camera_node.hpp"
+#include <nodes/camera_node.hpp>
 
 #include <string>
 

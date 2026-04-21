@@ -1,4 +1,4 @@
-#include "../../include/nodes/aruco_node.hpp"
+#include <nodes/aruco_node.hpp>
 
 #include <string>
 

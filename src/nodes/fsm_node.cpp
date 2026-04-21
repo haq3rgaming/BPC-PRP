@@ -1,5 +1,5 @@
-#include "../../include/nodes/fsm_node.hpp"
-#include "../../include/algorithms/enums.hpp"
+#include <nodes/fsm_node.hpp>
+#include <algorithms/enums.hpp>
 
 namespace nodes {
     FSMNode::FSMNode() : Node("fsm_node") {
