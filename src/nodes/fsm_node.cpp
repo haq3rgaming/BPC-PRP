@@ -1,67 +1,185 @@
 #include <nodes/fsm_node.hpp>
-#include <algorithms/enums.hpp>
 
 namespace nodes {
     FSMNode::FSMNode() : Node("fsm_node") {
-        aruco_code_subscriber = this->create_subscription<std_msgs::msg::UInt8>(
-            "/bpc_prp_robot/marker_data",
-            1,
-            std::bind(&FSMNode::on_aruco_code_callback, this, std::placeholders::_1)
+        aruco_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
+            "/bpc_prp_robot/marker_data", 1,
+            std::bind(&FSMNode::aruco_callback, this, std::placeholders::_1)
         );
-        command_finished_subscriber = this->create_subscription<std_msgs::msg::Bool>(
-            "/bpc_prp_robot/command_finished",
-            1,
-            std::bind(&FSMNode::on_command_finished_callback, this, std::placeholders::_1)
+
+        encoder_sub_ = this->create_subscription<std_msgs::msg::UInt32MultiArray>(
+            "/bpc_prp_robot/encoders", 1,
+            std::bind(&FSMNode::encoder_callback, this, std::placeholders::_1)
         );
-        command_data_publisher = this->create_publisher<std_msgs::msg::UInt8>("/bpc_prp_robot/command_data", 1);
-        RCLCPP_INFO(this->get_logger(), "FSMNode initialized and subscribed to /bpc_prp_robot/command_finished");
+
+        lidar_sub_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
+            "/bpc_prp_robot/filtered_lidar", 1,
+            std::bind(&FSMNode::lidar_callback, this, std::placeholders::_1)
+        );
+
+        imu_sub_ = this->create_subscription<std_msgs::msg::Float64>(
+            "/bpc_prp_robot/angle", 1,
+            std::bind(&FSMNode::imu_callback, this, std::placeholders::_1)
+        );
+
+        vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(
+            "/bpc_prp_robot/cmd_vel", 1
+        );
+
+        control_timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(5),
+            std::bind(&FSMNode::controlLoop, this)
+        );
+
+        RCLCPP_INFO(this->get_logger(), "FSMNode initialized");
     }
 
-    void FSMNode::on_aruco_code_callback(const std_msgs::msg::UInt8::SharedPtr msg) {
-        ArucoMarkerID marker = static_cast<ArucoMarkerID>(msg->data);
-        if (next_intersection_ == NONE) {
-            switch (marker) {
-                case EXIT_FW:
-                    next_intersection_ = FW;
+    void FSMNode::controlLoop() {
+        float fw_speed = 0.0;
+        float turn = 0.0;
+        next_state();
+        switch (current_state_)
+        {
+            case CALIBRATION: // IMU calibration, wait for first IMU message
+                fw_speed = 0.0;
+                turn = 0.0;
+                break;
+            case CORRIDOR: // Drive forward until we detect an intersection
+                if (working && lidar_around_.back > 0.4) working = false;
+                fw_speed = std::clamp((lidar_around_.front - 0.2) / 2, 0.0, 0.1);
+                turn = std::clamp(
+                    (
+                        std::clamp(lidar_around_.left, 0.0f, 0.2f) -
+                        std::clamp(lidar_around_.right, 0.0f, 0.2f)
+                    ) * 3, -1.0f, 1.0f);
+                break;
+            case INTERSECTION: // Stop and decide which way to turn
+                fw_speed = 0.0;
+                turn = 0.0;
+                break;
+            case TURN: // Execute the turn, then pop the intersection queue
+                if (std::abs(target_angle_ - current_angle_) < 0.1) {
+                    current_state_ = CORRIDOR;
                     break;
-                case EXIT_LEFT:
-                    next_intersection_ = LEFT;
-                    break;
-                case EXIT_RIGHT:
-                    next_intersection_ = RIGHT;
-                    break;
-                case TREASURE_FW:
-                case TREASURE_LEFT:
-                case TREASURE_RIGHT:
-                    break; // Ignore treasure markers for now
-                default:
-                    RCLCPP_WARN(this->get_logger(), "Received unknown Aruco marker ID: %d", msg->data);
+                }
+                turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
+                fw_speed = 0.0;
+                break;
+            case STOP: // End or invalid state, stop the robot
+                fw_speed = 0.0;
+                turn = 0.0;
+                break;
+            default:
+                current_state_=STOP;
+                break;
+        }
+        publish_velocity(fw_speed, turn);
+    }
+
+    void FSMNode::next_state() {
+        if (working) return;
+        int walls = number_of_walls();
+        RCLCPP_INFO(this->get_logger(), "Walls: %d", walls);
+        if (walls == 2 && !is_wall(lidar_around_.front)) {
+            current_state_ = CORRIDOR;
+        } else if (walls == 2 && is_wall(lidar_around_.front)) {
+            current_state_ = TURN;
+            working = true;
+            if (!is_wall(lidar_around_.left)) {
+                target_angle_ = current_angle_ + M_PI / 2;
+            } else if (!is_wall(lidar_around_.right)) {
+                target_angle_ = current_angle_ - M_PI / 2;
+            } else {
+                target_angle_ = current_angle_ + M_PI; // U-turn
             }
-            RCLCPP_INFO(this->get_logger(), "Updated next intersection to: %d", next_intersection_);
+        }
+        RCLCPP_INFO(this->get_logger(), "Current state: %d", current_state_);
+    }
+
+    bool FSMNode::is_wall(float distance) {
+        return distance < 0.25;
+    }
+
+    int FSMNode::number_of_walls() {
+        int count = 0;
+        if (is_wall(lidar_around_.front)) count++;
+        // if (is_wall(lidar_around_.back)) count++;
+        if (is_wall(lidar_around_.left)) count++;
+        if (is_wall(lidar_around_.right)) count++;
+        return count;
+    }
+
+    void FSMNode::aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg) {
+        ArucoMarkerID marker = static_cast<ArucoMarkerID>(msg->data);
+        auto marker_intersection = convert_marker_to_intersection(marker);
+        if (marker_intersection == NONE) return; // Invalid marker
+        if (intersection_queue.empty()) {
+            intersection_queue.push_back(marker_intersection);
+            return;
+        }
+        auto first_element = intersection_queue.front();
+        if (marker_intersection != first_element) {
+            intersection_queue.push_back(marker_intersection);
         }
     }
 
-    void FSMNode::on_command_finished_callback(const std_msgs::msg::Bool::SharedPtr msg) {
-        command_finished_ = msg->data;
-        if (command_finished_) {
-            RCLCPP_INFO(this->get_logger(), "Received command finished signal. Executing next command.");
-            execute_current_command();
+    FSMNextIntersection FSMNode::convert_marker_to_intersection(ArucoMarkerID marker) {
+        switch (marker) {
+            case EXIT_FW:
+                return FW;
+            case EXIT_LEFT:
+                return LEFT;
+            case EXIT_RIGHT:
+                return RIGHT;
+            default:
+                return NONE;
         }
     }
 
-    void FSMNode::execute_current_command() {
-        command_finished_ = false; // Reset the flag for the next command
-        std_msgs::msg::UInt8 command_data_msg;
-        command_data_msg.data = static_cast<uint8_t>(current_state_);
-        command_data_publisher->publish(command_data_msg);
-        RCLCPP_INFO(this->get_logger(), "Published command data: %d", command_data_msg.data);
-        while (!command_finished_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        } 
-        update_state(); // Update the state after the command is finished
+    FSMNextIntersection FSMNode::get_next_intersection() {
+        if (intersection_queue.empty()) return NONE;
+        auto next = intersection_queue.front();
+        intersection_queue.erase(intersection_queue.begin());
+        return next;
     }
 
-    void FSMNode::update_state() {
-        //TODO: Im lazy now
+    FSMNextIntersection FSMNode::peek_next_intersection() {
+        if (intersection_queue.empty()) return NONE;
+        return intersection_queue.front();
+    }
+
+    void FSMNode::encoder_callback(const std_msgs::msg::UInt32MultiArray::SharedPtr msg) {
+        if (msg->data.size() < 2) {
+            RCLCPP_WARN(this->get_logger(), "Received encoder message with insufficient data");
+            return;
+        }
+        left_encoder_ticks_ = msg->data[0];
+        right_encoder_ticks_ = msg->data[1];
+    }
+
+    void FSMNode::lidar_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
+        if (msg->data.size() < 4) {
+            RCLCPP_WARN(this->get_logger(), "Received lidar message with insufficient data");
+            return;
+        }
+        lidar_around_.front = msg->data[0];
+        lidar_around_.back = msg->data[1];
+        lidar_around_.left = msg->data[2];
+        lidar_around_.right = msg->data[3];
+    }
+
+    void FSMNode::imu_callback(const std_msgs::msg::Float64::SharedPtr msg) {
+        if (current_state_ == CALIBRATION) {
+            working = false;
+            current_state_ = CORRIDOR;
+        }
+        current_angle_ = msg->data;
+    }
+
+    void FSMNode::publish_velocity(double linear_x, double angular_z) {
+        geometry_msgs::msg::Twist cmd_vel;
+        cmd_vel.linear.x = linear_x;
+        cmd_vel.angular.z = angular_z;
+        vel_publisher_->publish(cmd_vel);
     }
 }

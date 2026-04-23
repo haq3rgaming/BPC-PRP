@@ -24,7 +24,8 @@ namespace nodes {
         );
         marker_data_publisher_ = this->create_publisher<std_msgs::msg::UInt8>("/bpc_prp_robot/marker_data", 1);
         marker_found_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/bpc_prp_robot/marker_found", 1);
-        RCLCPP_INFO(this->get_logger(), "ArucoNode initialized and subscribed to /bpc_prp_robot/camera/compressed");
+        
+        RCLCPP_INFO(this->get_logger(), "ArucoNode initialized");
     }
 
     void ArucoNode::flip_image(cv::Mat& frame) {

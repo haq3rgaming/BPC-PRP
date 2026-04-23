@@ -1,10 +1,16 @@
 #pragma once
 
-#include "../../include/algorithms/enums.hpp"
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/u_int8.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/u_int32_multi_array.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+
+#include "algorithms/enums.hpp"
+#include "algorithms/structs.hpp"
 
 namespace nodes {
     class FSMNode : public rclcpp::Node {
@@ -12,16 +18,37 @@ namespace nodes {
         FSMNode();
         ~FSMNode() override = default;
     private:
-        rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr aruco_code_subscriber;
-        rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr command_finished_subscriber;
-        rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr command_data_publisher;
-        bool command_finished_ = false;
-        FSMState current_state_ = START;
-        FSMNextIntersection next_intersection_ = NONE;
+        const int TICKS_PER_REV = 576;
 
-        void on_aruco_code_callback(const std_msgs::msg::UInt8::SharedPtr msg);
-        void on_command_finished_callback(const std_msgs::msg::Bool::SharedPtr msg);
-        void execute_current_command();
-        void update_state();
+        rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr aruco_sub_;
+        rclcpp::Subscription<std_msgs::msg::UInt32MultiArray>::SharedPtr encoder_sub_;
+        rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr lidar_sub_;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr imu_sub_;
+        rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr vel_publisher_;
+
+        rclcpp::TimerBase::SharedPtr control_timer_;
+        volatile FSMState current_state_ = CALIBRATION;
+        volatile bool working = true;
+
+        void aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg);
+        void encoder_callback(const std_msgs::msg::UInt32MultiArray::SharedPtr msg);
+        void lidar_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+        void imu_callback(const std_msgs::msg::Float64::SharedPtr msg);
+        void publish_velocity(double linear_x, double angular_z);
+        void controlLoop();
+        void next_state();
+
+        int number_of_walls();
+        bool is_wall(float distance);
+
+        std::vector<FSMNextIntersection> intersection_queue {};
+        FSMNextIntersection convert_marker_to_intersection(ArucoMarkerID marker);
+        FSMNextIntersection peek_next_intersection();
+        FSMNextIntersection get_next_intersection();
+        uint32_t left_encoder_ticks_ = 0;
+        uint32_t right_encoder_ticks_ = 0;
+        Around lidar_around_;
+        double current_angle_ = 0.0;
+        double target_angle_ = 0.0;
     };
 }

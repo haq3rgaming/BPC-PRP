@@ -16,6 +16,8 @@ namespace nodes {
         theta_ = 0.0;
         gyro_offset_ = 0.0;
         has_last_timestamp_ = false;
+
+        RCLCPP_INFO(this->get_logger(), "ImuNode initialized");
     }
 
     void ImuNode::setMode(ImuNodeMode mode) {

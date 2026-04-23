@@ -2,13 +2,11 @@
 
 namespace nodes {
     enum FSMState {
-        START = 0,
-        MOVE_FORWARD,
-        MOVE_BACKWARD,
-        TURN_LEFT,
-        TURN_RIGHT,
-        STOP,
-        COMPUTE_NEXT_COMMAND
+        CALIBRATION = 0,
+        CORRIDOR,
+        INTERSECTION,
+        TURN,
+        STOP
     };
 
     enum FSMNextIntersection {

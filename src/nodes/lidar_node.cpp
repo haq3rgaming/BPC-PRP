@@ -1,4 +1,4 @@
-#include "../../include/nodes/lidar_node.hpp"
+#include "nodes/lidar_node.hpp"
 #include <cmath>
 
 #define DEG_TO_RAD(x) (M_PI * (x)/180.0)
@@ -22,6 +22,8 @@ namespace nodes {
             std::chrono::milliseconds(2),
             std::bind(&LidarNode::filter, this)
         );
+
+        RCLCPP_INFO(this->get_logger(), "LidarNode initialized");
     }
 
     void LidarNode::filter(){
@@ -69,16 +71,10 @@ namespace nodes {
         // Order: front, back, left, right
         msg.data = {filter_data.front, filter_data.back , filter_data.left, filter_data.right};
         filtered_lidar->publish(msg);
-        //RCLCPP_INFO(this->get_logger(), "Front: %f Back: %f Left: %f Right: %f",filter_data.front,filter_data.back,filter_data.left,filter_data.right);
-
-
     }
 
     void LidarNode::on_lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
-        //RCLCPP_INFO(this->get_logger(),"Recived");
         angle_step=msg->angle_increment;
         lidar_data_=msg->ranges; // Is in m
-        //filter();
-
     }
 }
