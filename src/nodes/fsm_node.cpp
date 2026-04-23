@@ -1,5 +1,8 @@
 #include <nodes/fsm_node.hpp>
+#include <cmath>
 
+#define DEG_TO_RAD(x) (M_PI * (x)/180.0)
+#define RAD_TO_DEG(x) ((x)*180.0/M_PI)
 namespace nodes {
     FSMNode::FSMNode() : Node("fsm_node") {
         aruco_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
@@ -37,7 +40,7 @@ namespace nodes {
     void FSMNode::controlLoop() {
         float fw_speed = 0.0;
         float turn = 0.0;
-        next_state();
+        //next_state();
         switch (current_state_)
         {
             case CALIBRATION: // IMU calibration, wait for first IMU message
@@ -45,8 +48,20 @@ namespace nodes {
                 turn = 0.0;
                 break;
             case CORRIDOR: // Drive forward until we detect an intersection
-                if (working && lidar_around_.back > 0.4) working = false;
-                fw_speed = std::clamp((lidar_around_.front - 0.2) / 2, 0.0, 0.1);
+                if(number_of_walls() == 2 && lidar_around_.front < 0.2 && (is_wall(lidar_around_.left) || is_wall(lidar_around_.right))) {
+                    if(is_wall(lidar_around_.left)){
+                        target_angle_ = current_angle_- M_PI / 2;
+                        current_state_ = TURN;
+                        break;
+                    }
+                    if(is_wall(lidar_around_.right)){
+                        target_angle_ = current_angle_ + M_PI / 2;
+                        current_state_ = TURN;
+                        break;
+                    }
+                }
+                        
+                fw_speed = std::clamp((lidar_around_.front - 0.1) / 2, 0.0, 0.1);
                 turn = std::clamp(
                     (
                         std::clamp(lidar_around_.left, 0.0f, 0.2f) -
@@ -59,11 +74,19 @@ namespace nodes {
                 break;
             case TURN: // Execute the turn, then pop the intersection queue
                 if (std::abs(target_angle_ - current_angle_) < 0.1) {
-                    current_state_ = CORRIDOR;
-                    break;
+                    if (is_wall(lidar_around_.back))
+                    {
+                        fw_speed = 0.1;
+                        turn = 0.0;
+                    }else{
+                        current_state_ = CORRIDOR;
+                        break;
+                    }
+                    
+                }else {
+                    turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
+                    fw_speed = 0.0;
                 }
-                turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
-                fw_speed = 0.0;
                 break;
             case STOP: // End or invalid state, stop the robot
                 fw_speed = 0.0;
@@ -97,7 +120,7 @@ namespace nodes {
     }
 
     bool FSMNode::is_wall(float distance) {
-        return distance < 0.25;
+        return distance < 0.3;
     }
 
     int FSMNode::number_of_walls() {
