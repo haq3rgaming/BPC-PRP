@@ -16,7 +16,7 @@ namespace nodes {
         );
 
         control_timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(100),
+            std::chrono::milliseconds(20),
             std::bind(&IoNode::controlLoop, this)
         );
 
