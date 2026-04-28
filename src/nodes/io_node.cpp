@@ -2,7 +2,7 @@
 
 #define IS_WALL_THRESHOLD 0.3
 #define IS_WALL(distance) (distance < IS_WALL_THRESHOLD)
-#define LED_ON 127
+#define LED_ON 32
 
 namespace nodes {
     IoNode::IoNode() : Node("io_node") {
@@ -31,7 +31,7 @@ namespace nodes {
             led_msg.data[1] = LED_ON;
             led_msg.data[2] = LED_ON;
         }
-        if (IS_WALL(lidar_around_.front)) {
+        if (IS_WALL(lidar_around_.right)) {
             led_msg.data[3] = LED_ON;
             led_msg.data[4] = LED_ON;
             led_msg.data[5] = LED_ON;
@@ -41,7 +41,7 @@ namespace nodes {
             led_msg.data[7] = LED_ON;
             led_msg.data[8] = LED_ON;
         }
-        if (IS_WALL(lidar_around_.right)) {
+        if (IS_WALL(lidar_around_.front)) {
             led_msg.data[9] = LED_ON;
             led_msg.data[10] = LED_ON;
             led_msg.data[11] = LED_ON;
