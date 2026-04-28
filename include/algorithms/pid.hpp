@@ -4,6 +4,7 @@ namespace nodes {
     class PID {
     public:
         PID(double kp, double ki, double kd);
+        ~PID() = default;
 
         double update(double target, double current, double dt);
         void reset();
