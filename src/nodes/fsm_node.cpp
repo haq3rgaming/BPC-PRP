@@ -3,6 +3,10 @@
 
 #define DEG_TO_RAD(x) (M_PI * (x)/180.0)
 #define RAD_TO_DEG(x) ((x)*180.0/M_PI)
+#define IN_RANGE(x, lower, upper) ((x) > (lower) && (x) < (upper))
+
+#define WALL_DISTANCE_THRESHOLD 0.3
+
 namespace nodes {
     FSMNode::FSMNode() : Node("fsm_node") {
         aruco_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
@@ -40,7 +44,6 @@ namespace nodes {
     void FSMNode::controlLoop() {
         float fw_speed = 0.0;
         float turn = 0.0;
-        //next_state();
         switch (current_state_)
         {
             case CALIBRATION: // IMU calibration, wait for first IMU message
@@ -48,30 +51,37 @@ namespace nodes {
                 turn = 0.0;
                 break;
             case CORRIDOR: // Drive forward until we detect an intersection
-                if(number_of_walls() == 2 && lidar_around_.front < 0.2 && (is_wall(lidar_around_.left) || is_wall(lidar_around_.right))) {
+                if (
+                    number_of_walls() >= 2 &&
+                    lidar_around_.front < 0.2 &&
+                    (
+                        is_wall(lidar_around_.left) ||
+                        is_wall(lidar_around_.right)
+                    )
+                    ) {
                     float notNormalized_angle = 0.0;
-                    if(is_wall(lidar_around_.left)){
+                    if (is_wall(lidar_around_.left)){
                         notNormalized_angle = current_angle_- M_PI / 2;
-                    }else if(is_wall(lidar_around_.right)){
+                    } else if(is_wall(lidar_around_.right)){
                         notNormalized_angle = current_angle_ + M_PI / 2;
-                    }else{
+                    } else {
                         notNormalized_angle = current_angle_ + M_PI; // U-turn
                     }
                     
                     notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
 
                     // Normalize target angle to 1/2pi,pi,-pi/2,-pi
-                    if (notNormalized_angle > DEG_TO_RAD(-10) && notNormalized_angle < DEG_TO_RAD(10)) {
+                    if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-10), DEG_TO_RAD(10))) {
                         target_angle_ = 0.0;
-                    }else if (notNormalized_angle > DEG_TO_RAD(80) && notNormalized_angle < DEG_TO_RAD(100)) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(80), DEG_TO_RAD(100))) {
                         target_angle_ = DEG_TO_RAD(90);
-                    }else if (notNormalized_angle > DEG_TO_RAD(170) && notNormalized_angle < DEG_TO_RAD(190)) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(170), DEG_TO_RAD(190))) {
                         target_angle_ = DEG_TO_RAD(180);
-                    }else if (notNormalized_angle > DEG_TO_RAD(-100) && notNormalized_angle < DEG_TO_RAD(-80)) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-100), DEG_TO_RAD(-80))) {
                         target_angle_ = DEG_TO_RAD(-90);
-                    }else if (notNormalized_angle > DEG_TO_RAD(-190) && notNormalized_angle < DEG_TO_RAD(-170)) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-190), DEG_TO_RAD(-170))) {
                         target_angle_ = DEG_TO_RAD(-180);
-                    }else{
+                    } else {
                         target_angle_ = notNormalized_angle; // If it's not close to any of the cardinal directions, just use the raw angle (this should be rare)
                     }
 
@@ -93,16 +103,15 @@ namespace nodes {
                 break;
             case TURN: // Execute the turn, then pop the intersection queue
                 if (std::abs(target_angle_ - current_angle_) < 0.1) {
-                    if (is_wall(lidar_around_.back))
-                    {
+                    if (is_wall(lidar_around_.back)) {
                         fw_speed = 0.1;
                         turn = 0.0;
-                    }else{
+                    } else {
                         current_state_ = CORRIDOR;
                         break;
                     }
                     
-                }else {
+                } else {
                     turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
                     fw_speed = 0.0;
                 }
@@ -118,28 +127,8 @@ namespace nodes {
         publish_velocity(fw_speed, turn);
     }
 
-    void FSMNode::next_state() {
-        if (working) return;
-        int walls = number_of_walls();
-        RCLCPP_INFO(this->get_logger(), "Walls: %d", walls);
-        if (walls == 2 && !is_wall(lidar_around_.front)) {
-            current_state_ = CORRIDOR;
-        } else if (walls == 2 && is_wall(lidar_around_.front)) {
-            current_state_ = TURN;
-            working = true;
-            if (!is_wall(lidar_around_.left)) {
-                target_angle_ = current_angle_ + M_PI / 2;
-            } else if (!is_wall(lidar_around_.right)) {
-                target_angle_ = current_angle_ - M_PI / 2;
-            } else {
-                target_angle_ = current_angle_ + M_PI; // U-turn
-            }
-        }
-        RCLCPP_INFO(this->get_logger(), "Current state: %d", current_state_);
-    }
-
     bool FSMNode::is_wall(float distance) {
-        return distance < 0.3;
+        return distance < WALL_DISTANCE_THRESHOLD;
     }
 
     int FSMNode::number_of_walls() {
@@ -153,19 +142,13 @@ namespace nodes {
 
     void FSMNode::aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg) {
         ArucoMarkerID marker = static_cast<ArucoMarkerID>(msg->data);
-        auto marker_intersection = convert_marker_to_intersection(marker);
-        if (marker_intersection == NONE) return; // Invalid marker
-        if (intersection_queue.empty()) {
-            intersection_queue.push_back(marker_intersection);
-            return;
-        }
-        auto first_element = intersection_queue.front();
-        if (marker_intersection != first_element) {
-            intersection_queue.push_back(marker_intersection);
-        }
+        FSMNextIntersection marker_intersection = convert_marker_to_intersection(marker);
+        if (marker_intersection == NONE) return;
+        exit_queue_.push(marker_intersection);
     }
 
     FSMNextIntersection FSMNode::convert_marker_to_intersection(ArucoMarkerID marker) {
+        // Only consider exit markers for now, we can add treasure markers later if needed
         switch (marker) {
             case EXIT_FW:
                 return FW;
@@ -176,18 +159,6 @@ namespace nodes {
             default:
                 return NONE;
         }
-    }
-
-    FSMNextIntersection FSMNode::get_next_intersection() {
-        if (intersection_queue.empty()) return NONE;
-        auto next = intersection_queue.front();
-        intersection_queue.erase(intersection_queue.begin());
-        return next;
-    }
-
-    FSMNextIntersection FSMNode::peek_next_intersection() {
-        if (intersection_queue.empty()) return NONE;
-        return intersection_queue.front();
     }
 
     void FSMNode::encoder_callback(const std_msgs::msg::UInt32MultiArray::SharedPtr msg) {
@@ -211,10 +182,7 @@ namespace nodes {
     }
 
     void FSMNode::imu_callback(const std_msgs::msg::Float64::SharedPtr msg) {
-        if (current_state_ == CALIBRATION) {
-            working = false;
-            current_state_ = CORRIDOR;
-        }
+        current_state_ = current_state_ == CALIBRATION ? CORRIDOR : current_state_;
         current_angle_ = msg->data;
     }
 

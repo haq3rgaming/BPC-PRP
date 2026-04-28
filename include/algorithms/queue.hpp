@@ -9,7 +9,7 @@ namespace nodes {
     public:
         Queue();
         ~Queue() = default;
-        void push(FSMNextIntersection intersection, bool ignore_duplicates);
+        void push(FSMNextIntersection intersection, bool ignore_duplicates = true);
         FSMNextIntersection pop();
         FSMNextIntersection peek();
         bool is_empty();
