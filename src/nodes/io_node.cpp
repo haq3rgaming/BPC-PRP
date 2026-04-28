@@ -2,6 +2,7 @@
 
 #define IS_WALL_THRESHOLD 0.3
 #define IS_WALL(distance) (distance < IS_WALL_THRESHOLD)
+#define LED_ON 127
 
 namespace nodes {
     IoNode::IoNode() : Node("io_node") {
@@ -26,24 +27,24 @@ namespace nodes {
         std_msgs::msg::UInt8MultiArray led_msg;
         led_msg.data = {0,0,0,0,0,0,0,0,0,0,0,0};
         if (IS_WALL(lidar_around_.back)) {
-            led_msg.data[0] = 255;
-            led_msg.data[1] = 255;
-            led_msg.data[2] = 255;
+            led_msg.data[0] = LED_ON;
+            led_msg.data[1] = LED_ON;
+            led_msg.data[2] = LED_ON;
         }
         if (IS_WALL(lidar_around_.front)) {
-            led_msg.data[3] = 255;
-            led_msg.data[4] = 255;
-            led_msg.data[5] = 255;
+            led_msg.data[3] = LED_ON;
+            led_msg.data[4] = LED_ON;
+            led_msg.data[5] = LED_ON;
         }
         if (IS_WALL(lidar_around_.left)) {
-            led_msg.data[6] = 255;
-            led_msg.data[7] = 255;
-            led_msg.data[8] = 255;
+            led_msg.data[6] = LED_ON;
+            led_msg.data[7] = LED_ON;
+            led_msg.data[8] = LED_ON;
         }
         if (IS_WALL(lidar_around_.right)) {
-            led_msg.data[9] = 255;
-            led_msg.data[10] = 255;
-            led_msg.data[11] = 255;
+            led_msg.data[9] = LED_ON;
+            led_msg.data[10] = LED_ON;
+            led_msg.data[11] = LED_ON;
         }
         led_pub_->publish(led_msg);
     }
