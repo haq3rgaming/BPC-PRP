@@ -49,7 +49,7 @@ namespace nodes {
         if (mode == ImuNodeMode::CALIBRATE) {
             // Collect gyro calibration samples
             gyro_calibration_samples_.push_back(msg->angular_velocity.z);
-            if (gyro_calibration_samples_.size() >= 1000) {
+            if (gyro_calibration_samples_.size() >= 500) {
                 calibrate();
                 setMode(ImuNodeMode::INTEGRATE);
                 last_timestamp_ = rclcpp::Time(msg->header.stamp);

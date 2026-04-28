@@ -40,22 +40,22 @@ namespace nodes {
 
         for(int i = 0 ; i<max;i++){
             if(!std::isnan(lidar_data_[i])&&!std::isinf(lidar_data_[i])){
-            if(i*angle_step<=DEG_TO_RAD(5) || i*angle_step>DEG_TO_RAD(355)){
+            if(i*angle_step<=DEG_TO_RAD(10) || i*angle_step>DEG_TO_RAD(350)){
                 filter_data.front+=lidar_data_[i];
                 f++;
             }
 
-            if(i*angle_step>=DEG_TO_RAD(85) && i*angle_step<DEG_TO_RAD(95)){
+            if(i*angle_step>=DEG_TO_RAD(80) && i*angle_step<DEG_TO_RAD(100)){
                 filter_data.left+=lidar_data_[i];
                 l++;
             }
 
-            if(i*angle_step>=DEG_TO_RAD(175) && i*angle_step<DEG_TO_RAD(185)){
+            if(i*angle_step>=DEG_TO_RAD(170) && i*angle_step<DEG_TO_RAD(190)){
                 filter_data.back+=lidar_data_[i];
                 b++;
             }
 
-            if(i*angle_step>=DEG_TO_RAD(265) && i*angle_step<DEG_TO_RAD(275)){
+            if(i*angle_step>=DEG_TO_RAD(260) && i*angle_step<DEG_TO_RAD(280)){
                 filter_data.right+=lidar_data_[i];
                 r++;
             }

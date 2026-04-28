@@ -7,6 +7,7 @@
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 
+#include "algorithms/pid.hpp"
 #include "algorithms/enums.hpp"
 #include "algorithms/structs.hpp"
 #include "algorithms/queue.hpp"
@@ -46,5 +47,6 @@ namespace nodes {
         Around lidar_around_;
         double current_angle_ = 0.0;
         double target_angle_ = 0.0;
+        PID turn_pid_ {2.0, 0.10, 1.5}; // Tuned for quick response with minimal overshoot
     };
 }

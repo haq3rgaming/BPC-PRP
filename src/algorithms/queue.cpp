@@ -3,7 +3,7 @@
 namespace nodes {
     Queue::Queue() = default;
 
-    void Queue::push(FSMNextIntersection intersection, bool ignore_duplicates = true) {
+    void Queue::push(FSMNextIntersection intersection, bool ignore_duplicates) {
         if (ignore_duplicates && queue_.back() == intersection) return;
         queue_.push_back(intersection);
     }

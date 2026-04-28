@@ -60,9 +60,9 @@ namespace nodes {
                     )
                     ) {
                     float notNormalized_angle = 0.0;
-                    if (is_wall(lidar_around_.left)){
+                    if (is_wall(lidar_around_.left)&& !is_wall(lidar_around_.right)) {
                         notNormalized_angle = current_angle_- M_PI / 2;
-                    } else if(is_wall(lidar_around_.right)){
+                    } else if(is_wall(lidar_around_.right)&& !is_wall(lidar_around_.left)) {
                         notNormalized_angle = current_angle_ + M_PI / 2;
                     } else {
                         notNormalized_angle = current_angle_ + M_PI; // U-turn
@@ -71,31 +71,32 @@ namespace nodes {
                     notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
 
                     // Normalize target angle to 1/2pi,pi,-pi/2,-pi
-                    if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-10), DEG_TO_RAD(10))) {
+                    if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-20), DEG_TO_RAD(20))) {
                         target_angle_ = 0.0;
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(80), DEG_TO_RAD(100))) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(70), DEG_TO_RAD(110))) {
                         target_angle_ = DEG_TO_RAD(90);
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(170), DEG_TO_RAD(190))) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(160), DEG_TO_RAD(200))) {
                         target_angle_ = DEG_TO_RAD(180);
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-100), DEG_TO_RAD(-80))) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-110), DEG_TO_RAD(-70))) {
                         target_angle_ = DEG_TO_RAD(-90);
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-190), DEG_TO_RAD(-170))) {
+                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-200), DEG_TO_RAD(-160))) {
                         target_angle_ = DEG_TO_RAD(-180);
                     } else {
                         target_angle_ = notNormalized_angle; // If it's not close to any of the cardinal directions, just use the raw angle (this should be rare)
                     }
 
-                    RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle ));
+                    //RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle ));
                     current_state_ = TURN;
                     break;
                 }
                         
-                fw_speed = std::clamp((lidar_around_.front - 0.1) / 2, 0.0, 0.1);
-                turn = std::clamp(
-                    (
-                        std::clamp(lidar_around_.left, 0.0f, 0.2f) -
-                        std::clamp(lidar_around_.right, 0.0f, 0.2f)
-                    ) * 3, -1.0f, 1.0f);
+                fw_speed = std::clamp((lidar_around_.front - 0.15), 0.0, 0.1);
+                turn = turn_pid_.update(
+                    0, 
+                    std::clamp(lidar_around_.right, 0.0f, 0.2f)-
+                    std::clamp(lidar_around_.left, 0.0f, 0.2f),
+                    0.005);
+                RCLCPP_INFO(this->get_logger(), "fw_speed: %f, turn: %f", fw_speed, turn);
                 break;
             case INTERSECTION: // Stop and decide which way to turn
                 fw_speed = 0.0;
