@@ -80,7 +80,7 @@ namespace nodes {
             this->theta_ += z_velocity * dt;
             //RCLCPP_INFO(this->get_logger(), "Integrated Yaw: %f radians", this->theta_);
             auto angle_msg = std_msgs::msg::Float64();
-            angle_msg.data = this->theta_;
+            angle_msg.data = std::remainder(this->theta_, 2.0 * M_PI); // Wrap angle to [-pi, pi]
             angle_publisher_->publish(angle_msg);
         }
     }

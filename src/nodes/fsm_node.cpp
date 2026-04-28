@@ -49,16 +49,35 @@ namespace nodes {
                 break;
             case CORRIDOR: // Drive forward until we detect an intersection
                 if(number_of_walls() == 2 && lidar_around_.front < 0.2 && (is_wall(lidar_around_.left) || is_wall(lidar_around_.right))) {
+                    float notNormalized_angle = 0.0;
                     if(is_wall(lidar_around_.left)){
-                        target_angle_ = current_angle_- M_PI / 2;
-                        current_state_ = TURN;
-                        break;
+                        notNormalized_angle = current_angle_- M_PI / 2;
+                    }else if(is_wall(lidar_around_.right)){
+                        notNormalized_angle = current_angle_ + M_PI / 2;
+                    }else{
+                        notNormalized_angle = current_angle_ + M_PI; // U-turn
                     }
-                    if(is_wall(lidar_around_.right)){
-                        target_angle_ = current_angle_ + M_PI / 2;
-                        current_state_ = TURN;
-                        break;
+                    
+                    notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
+
+                    // Normalize target angle to 1/2pi,pi,-pi/2,-pi
+                    if (notNormalized_angle > DEG_TO_RAD(-10) && notNormalized_angle < DEG_TO_RAD(10)) {
+                        target_angle_ = 0.0;
+                    }else if (notNormalized_angle > DEG_TO_RAD(80) && notNormalized_angle < DEG_TO_RAD(100)) {
+                        target_angle_ = DEG_TO_RAD(90);
+                    }else if (notNormalized_angle > DEG_TO_RAD(170) && notNormalized_angle < DEG_TO_RAD(190)) {
+                        target_angle_ = DEG_TO_RAD(180);
+                    }else if (notNormalized_angle > DEG_TO_RAD(-100) && notNormalized_angle < DEG_TO_RAD(-80)) {
+                        target_angle_ = DEG_TO_RAD(-90);
+                    }else if (notNormalized_angle > DEG_TO_RAD(-190) && notNormalized_angle < DEG_TO_RAD(-170)) {
+                        target_angle_ = DEG_TO_RAD(-180);
+                    }else{
+                        target_angle_ = notNormalized_angle; // If it's not close to any of the cardinal directions, just use the raw angle (this should be rare)
                     }
+
+                    RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle ));
+                    current_state_ = TURN;
+                    break;
                 }
                         
                 fw_speed = std::clamp((lidar_around_.front - 0.1) / 2, 0.0, 0.1);
