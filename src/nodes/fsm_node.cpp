@@ -43,27 +43,27 @@ namespace nodes {
 
     double FSMNode::normalize_angle(double angle) {
         double target_angle = 0;
-                            if (IN_RANGE(angle, DEG_TO_RAD(-20), DEG_TO_RAD(20))) {
-                        target_angle_ = 0.0;
+                    if (IN_RANGE(angle, DEG_TO_RAD(-20), DEG_TO_RAD(20))) {
+                        target_angle = 0.0;
                     } else if (IN_RANGE(angle, DEG_TO_RAD(70), DEG_TO_RAD(110))) {
-                        target_angle_ = DEG_TO_RAD(90);
+                        target_angle = DEG_TO_RAD(90);
                     } else if (IN_RANGE(angle, DEG_TO_RAD(160), DEG_TO_RAD(200))) {
                         if (current_angle_ > 0) {
-                            target_angle_ = DEG_TO_RAD(180);
+                            target_angle = DEG_TO_RAD(180);
                         } else {
-                            target_angle_ = DEG_TO_RAD(-180);
+                            target_angle = DEG_TO_RAD(-180);
                         }
-                        //target_angle_ = DEG_TO_RAD(180);
+                        //target_angle = DEG_TO_RAD(180);
                     } else if (IN_RANGE(angle, DEG_TO_RAD(-110), DEG_TO_RAD(-70))) {
-                        target_angle_ = DEG_TO_RAD(-90);
+                        target_angle = DEG_TO_RAD(-90);
                     } else if (IN_RANGE(angle, DEG_TO_RAD(-200), DEG_TO_RAD(-160))) {
                         if (current_angle_ > 0) {
-                            target_angle_ = DEG_TO_RAD(180);
+                            target_angle = DEG_TO_RAD(180);
                         } else {
-                            target_angle_ = DEG_TO_RAD(-180);
+                            target_angle = DEG_TO_RAD(-180);
                         }
                     } else {
-                        target_angle_ = angle; // If it's not close to any of the cardinal directions, just use the raw angle (this should be rare)
+                        target_angle = angle; // If it's not close to any of the cardinal directions, just use the raw angle (this should be rare)
                     }
         return target_angle;
     }
@@ -84,14 +84,14 @@ namespace nodes {
                 break;
             case CORRIDOR: // Drive forward until we detect an intersection
                 if (
-                    number_of_walls() == 2 &&
+                    number_of_walls() >= 2 &&
                     lidar_around_.front < 0.2 &&
                     (
                         is_wall(lidar_around_.left) ||
                         is_wall(lidar_around_.right)
                     )
                     ) {
-                    float notNormalized_angle = 0.0;
+                    double notNormalized_angle = 0.0;
                     if (is_wall(lidar_around_.left)&& !is_wall(lidar_around_.right)) {
                         notNormalized_angle = current_angle_- M_PI / 2;
                     } else if(is_wall(lidar_around_.right)&& !is_wall(lidar_around_.left)) {
@@ -113,11 +113,21 @@ namespace nodes {
                         !is_wall(lidar_around_.left) &&
                         !is_wall(lidar_around_.right)) {
                     // If we detect a wall in front but no walls on the sides, we might be facing a dead end or a narrow passage. In either case, we should turn around.
-                    
-                    
+                    double notNormalized_angle = current_angle_ - M_PI/2;
+                    notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
+                    target_angle_ = normalize_angle(notNormalized_angle);
                     current_state_ = INTERSECTION; // Treat it as an intersection to decide turn direction
                     break;
-                }
+                }/*else if (lidar_around_.front > 0.7 &&
+                        (!is_wall(lidar_around_.left) ||
+                        !is_wall(lidar_around_.right))) {
+                    // If we detect no walls, we might be in an open area or have lost track of the maze. Stop and wait for new data.
+                    double notNormalized_angle = current_angle_ + M_PI/2;
+                    notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
+                    target_angle_ = normalize_angle(notNormalized_angle);
+                    current_state_ = INTERSECTION; 
+                    break;
+                }*/
                         
                 fw_speed = std::clamp((lidar_around_.front - 0.15), 0.0, 0.1);
                 turn = turn_pid_.update(
@@ -128,12 +138,23 @@ namespace nodes {
                 //RCLCPP_INFO(this->get_logger(), "fw_speed: %f, turn: %f", fw_speed, turn);
                 break;
             case INTERSECTION: // Stop and decide which way to turn
-                fw_speed = 0.0;
-                turn = 0.0;
+                if (std::abs(target_angle_ - current_angle_) < 0.1) {
+                    if (!is_wall(lidar_around_.left)) {
+                        fw_speed = 0.1;
+                        turn = 0.0;
+                    } else {
+                        current_state_ = CORRIDOR;
+                        break;
+                    }
+                    
+                } else {
+                    turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
+                    fw_speed = 0.0;
+                }
                 break;
             case TURN: // Execute the turn, then pop the intersection queue
                 if (std::abs(target_angle_ - current_angle_) < 0.1) {
-                    if (is_wall(lidar_around_.back)) {
+                    if (lidar_around_.back<0.4) {
                         fw_speed = 0.1;
                         turn = 0.0;
                     } else {

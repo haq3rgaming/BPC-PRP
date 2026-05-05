@@ -37,7 +37,7 @@ namespace nodes {
         void publish_velocity(double linear_x, double angular_z);
         void controlLoop();
         double normalize_angle(double angle);
-        
+
         int number_of_walls();
         bool is_wall(float distance);
 
@@ -50,6 +50,6 @@ namespace nodes {
         double current_angle_ = 0.0;
         double target_angle_ = 0.0;
         PID turn_pid_ {2.0, 0.10, 1.5}; // Tuned for quick response with minimal overshoot
-        Watchdog lidarDog{std::chrono::milliseconds(100)}; // 100ms timeout for lidar data
+        Watchdog lidarDog{std::chrono::milliseconds(50)}; // 50ms timeout for lidar data
     };
 }
