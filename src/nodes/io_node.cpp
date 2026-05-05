@@ -2,7 +2,7 @@
 
 #define IS_WALL_THRESHOLD 0.3
 #define IS_WALL(distance) (distance < IS_WALL_THRESHOLD)
-#define LED_ON 32
+#define LED_ON 16
 
 namespace nodes {
     IoNode::IoNode() : Node("io_node") {
