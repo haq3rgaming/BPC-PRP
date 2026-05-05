@@ -41,9 +41,41 @@ namespace nodes {
         RCLCPP_INFO(this->get_logger(), "FSMNode initialized");
     }
 
+    double FSMNode::normalize_angle(double angle) {
+        double target_angle = 0;
+                            if (IN_RANGE(angle, DEG_TO_RAD(-20), DEG_TO_RAD(20))) {
+                        target_angle_ = 0.0;
+                    } else if (IN_RANGE(angle, DEG_TO_RAD(70), DEG_TO_RAD(110))) {
+                        target_angle_ = DEG_TO_RAD(90);
+                    } else if (IN_RANGE(angle, DEG_TO_RAD(160), DEG_TO_RAD(200))) {
+                        if (current_angle_ > 0) {
+                            target_angle_ = DEG_TO_RAD(180);
+                        } else {
+                            target_angle_ = DEG_TO_RAD(-180);
+                        }
+                        //target_angle_ = DEG_TO_RAD(180);
+                    } else if (IN_RANGE(angle, DEG_TO_RAD(-110), DEG_TO_RAD(-70))) {
+                        target_angle_ = DEG_TO_RAD(-90);
+                    } else if (IN_RANGE(angle, DEG_TO_RAD(-200), DEG_TO_RAD(-160))) {
+                        if (current_angle_ > 0) {
+                            target_angle_ = DEG_TO_RAD(180);
+                        } else {
+                            target_angle_ = DEG_TO_RAD(-180);
+                        }
+                    } else {
+                        target_angle_ = angle; // If it's not close to any of the cardinal directions, just use the raw angle (this should be rare)
+                    }
+        return target_angle;
+    }
     void FSMNode::controlLoop() {
         float fw_speed = 0.0;
         float turn = 0.0;
+        if (lidarDog.is_expired() && current_state_ != CALIBRATION) {
+            RCLCPP_WARN(this->get_logger(), "Lidar data expired, stopping robot");
+            publish_velocity(0.0, 0.0);
+            return;
+        }
+
         switch (current_state_)
         {
             case CALIBRATION: // IMU calibration, wait for first IMU message
@@ -52,7 +84,7 @@ namespace nodes {
                 break;
             case CORRIDOR: // Drive forward until we detect an intersection
                 if (
-                    number_of_walls() >= 2 &&
+                    number_of_walls() == 2 &&
                     lidar_around_.front < 0.2 &&
                     (
                         is_wall(lidar_around_.left) ||
@@ -69,24 +101,21 @@ namespace nodes {
                     }
                     
                     notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
-
+                    //RCLCPP_INFO(this->get_logger(), "notNormalized angle: %f deg", RAD_TO_DEG(notNormalized_angle));
                     // Normalize target angle to 1/2pi,pi,-pi/2,-pi
-                    if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-20), DEG_TO_RAD(20))) {
-                        target_angle_ = 0.0;
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(70), DEG_TO_RAD(110))) {
-                        target_angle_ = DEG_TO_RAD(90);
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(160), DEG_TO_RAD(200))) {
-                        target_angle_ = DEG_TO_RAD(180);
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-110), DEG_TO_RAD(-70))) {
-                        target_angle_ = DEG_TO_RAD(-90);
-                    } else if (IN_RANGE(notNormalized_angle, DEG_TO_RAD(-200), DEG_TO_RAD(-160))) {
-                        target_angle_ = DEG_TO_RAD(-180);
-                    } else {
-                        target_angle_ = notNormalized_angle; // If it's not close to any of the cardinal directions, just use the raw angle (this should be rare)
-                    }
+                    target_angle_ = normalize_angle(notNormalized_angle);
 
-                    //RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle ));
+                    RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle ));
                     current_state_ = TURN;
+                    break;
+                }
+                else if (lidar_around_.front < 0.2 &&
+                        !is_wall(lidar_around_.left) &&
+                        !is_wall(lidar_around_.right)) {
+                    // If we detect a wall in front but no walls on the sides, we might be facing a dead end or a narrow passage. In either case, we should turn around.
+                    
+                    
+                    current_state_ = INTERSECTION; // Treat it as an intersection to decide turn direction
                     break;
                 }
                         
@@ -96,7 +125,7 @@ namespace nodes {
                     std::clamp(lidar_around_.right, 0.0f, 0.2f)-
                     std::clamp(lidar_around_.left, 0.0f, 0.2f),
                     0.005);
-                RCLCPP_INFO(this->get_logger(), "fw_speed: %f, turn: %f", fw_speed, turn);
+                //RCLCPP_INFO(this->get_logger(), "fw_speed: %f, turn: %f", fw_speed, turn);
                 break;
             case INTERSECTION: // Stop and decide which way to turn
                 fw_speed = 0.0;
@@ -180,6 +209,7 @@ namespace nodes {
         lidar_around_.back = msg->data[1];
         lidar_around_.left = msg->data[2];
         lidar_around_.right = msg->data[3];
+        lidarDog.kick();
     }
 
     void FSMNode::imu_callback(const std_msgs::msg::Float64::SharedPtr msg) {
