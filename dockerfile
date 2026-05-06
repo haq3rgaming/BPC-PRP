@@ -1,7 +1,5 @@
 FROM osrf/ros:humble-desktop
 
-ARG CODE_SERVER_VERSION=4.102.0
-
 # Create user with id 1000
 ARG USERNAME=ros
 ARG USER_UID=1000
@@ -13,7 +11,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
 RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Set ROS_DOMAIN_ID environment variable for the user
-ARG ROS_DOMAIN_ID=7
+ARG ROS_DOMAIN_ID=5
 
 # Install necessary packages (nano, ping, ip utils)
 RUN apt-get update && apt-get install -y \
