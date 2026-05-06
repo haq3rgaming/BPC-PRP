@@ -18,11 +18,12 @@ namespace nodes {
             "/bpc_prp_robot/filtered_lidar",
             1
         );
+        /*
         timer_ = create_wall_timer(
             std::chrono::milliseconds(2),
             std::bind(&LidarNode::filter, this)
         );
-
+        */
         RCLCPP_INFO(this->get_logger(), "LidarNode initialized");
     }
 
@@ -76,5 +77,6 @@ namespace nodes {
     void LidarNode::on_lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
         angle_step=msg->angle_increment;
         lidar_data_=msg->ranges; // Is in m
+        filter();
     }
 }

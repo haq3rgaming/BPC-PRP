@@ -30,7 +30,7 @@ namespace nodes {
         rclcpp::TimerBase::SharedPtr control_timer_;
         volatile FSMState current_state_ = CALIBRATION;
 
-        void aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg);
+        //void aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg);
         void encoder_callback(const std_msgs::msg::UInt32MultiArray::SharedPtr msg);
         void lidar_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
         void imu_callback(const std_msgs::msg::Float64::SharedPtr msg);
@@ -48,8 +48,9 @@ namespace nodes {
         uint32_t right_encoder_ticks_ = 0;
         Around lidar_around_;
         double current_angle_ = 0.0;
+        double helper_angle_ = 0.0;
         double target_angle_ = 0.0;
         PID turn_pid_ {2.0, 0.10, 1.5}; // Tuned for quick response with minimal overshoot
-        Watchdog lidarDog{std::chrono::milliseconds(50)}; // 50ms timeout for lidar data
+        Watchdog lidarDog{std::chrono::milliseconds(900)}; // 50ms timeout for lidar data
     };
 }

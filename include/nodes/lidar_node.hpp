@@ -21,7 +21,7 @@ namespace nodes {
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
         rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr filtered_lidar;
         rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
-        rclcpp::TimerBase::SharedPtr timer_;
+        //rclcpp::TimerBase::SharedPtr timer_;
  
         void filter();
         void on_lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg);

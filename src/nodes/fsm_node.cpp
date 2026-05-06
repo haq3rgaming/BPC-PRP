@@ -9,11 +9,12 @@
 
 namespace nodes {
     FSMNode::FSMNode() : Node("fsm_node") {
+        /*
         aruco_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
             "/bpc_prp_robot/marker_data", 1,
             std::bind(&FSMNode::aruco_callback, this, std::placeholders::_1)
         );
-
+        */
         encoder_sub_ = this->create_subscription<std_msgs::msg::UInt32MultiArray>(
             "/bpc_prp_robot/encoders", 1,
             std::bind(&FSMNode::encoder_callback, this, std::placeholders::_1)
@@ -107,6 +108,7 @@ namespace nodes {
 
                     RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle ));
                     current_state_ = TURN;
+                    helper_angle_ = current_angle_;
                     break;
                 }
                 else if (lidar_around_.front < 0.2 &&
@@ -122,11 +124,12 @@ namespace nodes {
                         (!is_wall(lidar_around_.left) ||
                         !is_wall(lidar_around_.right))) {
                     // If we detect no walls, we might be in an open area or have lost track of the maze. Stop and wait for new data.
-                    double notNormalized_angle = current_angle_ + M_PI/2;
-                    notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
-                    target_angle_ = normalize_angle(notNormalized_angle);
-                    current_state_ = INTERSECTION; 
-                    break;
+                        double notNormalized_angle = current_angle_ + M_PI/2;
+                        notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
+                        target_angle_ = normalize_angle(notNormalized_angle);
+                        current_state_ = INTERSECTION; 
+                        break;
+
                 }*/
                         
                 fw_speed = std::clamp((lidar_around_.front - 0.15), 0.0, 0.1);
@@ -153,18 +156,21 @@ namespace nodes {
                 }
                 break;
             case TURN: // Execute the turn, then pop the intersection queue
-                if (std::abs(target_angle_ - current_angle_) < 0.1) {
-                    if (lidar_around_.back<0.4) {
-                        fw_speed = 0.1;
-                        turn = 0.0;
+                {
+                    double angle_error = std::remainder(target_angle_ - current_angle_, 2.0 * M_PI);
+                    if (std::abs(angle_error) < 0.1) {
+                        if (lidar_around_.back<0.4) {
+                            fw_speed = 0.1;
+                            turn = 0.0;
+                        } else {
+                            current_state_ = CORRIDOR;
+                            break;
+                        }
                     } else {
-                        current_state_ = CORRIDOR;
-                        break;
+                        turn = static_cast<float>(std::fmax(-1.0, std::fmin(1.0, angle_error)));
+                        //RCLCPP_INFO(this->get_logger(), "Turning... current: %f deg, target: %f deg, turn: %f", RAD_TO_DEG(current_angle_), RAD_TO_DEG(target_angle_), turn);
+                        fw_speed = 0.0;
                     }
-                    
-                } else {
-                    turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
-                    fw_speed = 0.0;
                 }
                 break;
             case STOP: // End or invalid state, stop the robot
@@ -191,27 +197,28 @@ namespace nodes {
         return count;
     }
 
+    /*
     void FSMNode::aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg) {
         ArucoMarkerID marker = static_cast<ArucoMarkerID>(msg->data);
         FSMNextIntersection marker_intersection = convert_marker_to_intersection(marker);
         if (marker_intersection == NONE) return;
         exit_queue_.push(marker_intersection);
     }
-
     FSMNextIntersection FSMNode::convert_marker_to_intersection(ArucoMarkerID marker) {
         // Only consider exit markers for now, we can add treasure markers later if needed
         switch (marker) {
             case EXIT_FW:
-                return FW;
+            return FW;
             case EXIT_LEFT:
-                return LEFT;
+            return LEFT;
             case EXIT_RIGHT:
-                return RIGHT;
+            return RIGHT;
             default:
-                return NONE;
+            return NONE;
         }
     }
-
+    
+    */
     void FSMNode::encoder_callback(const std_msgs::msg::UInt32MultiArray::SharedPtr msg) {
         if (msg->data.size() < 2) {
             RCLCPP_WARN(this->get_logger(), "Received encoder message with insufficient data");
