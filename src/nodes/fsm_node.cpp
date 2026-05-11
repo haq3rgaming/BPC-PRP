@@ -120,17 +120,17 @@ namespace nodes {
                     target_angle_ = normalize_angle(notNormalized_angle);
                     current_state_ = INTERSECTION; // Treat it as an intersection to decide turn direction
                     break;
-                }/*else if (lidar_around_.front > 0.7 &&
+                }else if (lidar_around_.front > 0.7 &&
                         (!is_wall(lidar_around_.left) ||
                         !is_wall(lidar_around_.right))) {
-                    // If we detect no walls, we might be in an open area or have lost track of the maze. Stop and wait for new data.
-                        double notNormalized_angle = current_angle_ + M_PI/2;
+                        double notNormalized_angle = current_angle_;
                         notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
                         target_angle_ = normalize_angle(notNormalized_angle);
-                        current_state_ = INTERSECTION; 
+                        target_lidar_front_ = lidar_around_.front- 0.15; // Set target front distance slightly ahead of current reading to encourage moving forward
+                        current_state_ = NO_FRONT_WALL_INTERSECTION; // Special state to handle intersections without a front wall
                         break;
 
-                }*/
+                }
                         
                 fw_speed = std::clamp((lidar_around_.front - 0.15), 0.0, 0.1);
                 turn = turn_pid_.update(
@@ -142,12 +142,37 @@ namespace nodes {
                 break;
             case INTERSECTION: // Stop and decide which way to turn
                 if (std::abs(target_angle_ - current_angle_) < 0.1) {
-                    if (!is_wall(lidar_around_.left)) {
+                    //if (!is_wall(lidar_around_.left)) {
+                    //    fw_speed = 0.1;
+                    //    turn = 0.0;
+                    //} else {
+                        current_state_ = GO_TO;
+                        target_lidar_front_ = lidar_around_.front - 0.15;
+                        fw_speed = 0.1;
+                        turn = 0.0;
+                        break;
+                    //}
+                    
+                } else {
+                    turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
+                    fw_speed = 0.0;
+                }
+                break;
+            case NO_FRONT_WALL_INTERSECTION: // Handle intersections without a front wall by treating them like regular intersections but with a more lenient turn condition
+                if (std::abs(target_angle_ - current_angle_) < 0.1) {
+                    if (lidar_around_.front > target_lidar_front_) {
                         fw_speed = 0.1;
                         turn = 0.0;
                     } else {
-                        current_state_ = CORRIDOR;
-                        break;
+                        //TODO:
+                        if(is_wall(lidar_around_.left) && is_wall(lidar_around_.right)) {
+                            current_state_ = CORRIDOR;
+                        }else{
+                            double notNormalized_angle = current_angle_ - M_PI/2;;
+                            notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
+                            target_angle_ = normalize_angle(notNormalized_angle);
+                            current_state_ = INTERSECTION;
+                        }
                     }
                     
                 } else {
@@ -171,6 +196,14 @@ namespace nodes {
                         //RCLCPP_INFO(this->get_logger(), "Turning... current: %f deg, target: %f deg, turn: %f", RAD_TO_DEG(current_angle_), RAD_TO_DEG(target_angle_), turn);
                         fw_speed = 0.0;
                     }
+                }
+                break;
+            case GO_TO: // Move towards the target (used for intersections without a front wall)
+                if (lidar_around_.front > target_lidar_front_) {
+                    fw_speed = 0.1;
+                    turn = 0.0;
+                } else {
+                    current_state_ = CORRIDOR;
                 }
                 break;
             case STOP: // End or invalid state, stop the robot

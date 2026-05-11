@@ -46,6 +46,7 @@ namespace nodes {
         FSMNextIntersection convert_marker_to_intersection(ArucoMarkerID marker);
         uint32_t left_encoder_ticks_ = 0;
         uint32_t right_encoder_ticks_ = 0;
+        float target_lidar_front_ = 0.0;
         Around lidar_around_;
         double current_angle_ = 0.0;
         double helper_angle_ = 0.0;

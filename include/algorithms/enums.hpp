@@ -6,6 +6,8 @@ namespace nodes {
         CORRIDOR,
         INTERSECTION,
         TURN,
+        NO_FRONT_WALL_INTERSECTION,
+        GO_TO,
         STOP
     };
 
