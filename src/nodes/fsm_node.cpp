@@ -114,7 +114,7 @@ namespace nodes {
                 else if (lidar_around_.front < 0.2 &&
                         !is_wall(lidar_around_.left) &&
                         !is_wall(lidar_around_.right)) {
-                    // If we detect a wall in front but no walls on the sides, we might be facing a dead end or a narrow passage. In either case, we should turn around.
+                    //TODO: rozhodnutí kudy dále
                     double notNormalized_angle = current_angle_ - M_PI/2;
                     notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
                     target_angle_ = normalize_angle(notNormalized_angle);
@@ -126,7 +126,7 @@ namespace nodes {
                         double notNormalized_angle = current_angle_;
                         notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
                         target_angle_ = normalize_angle(notNormalized_angle);
-                        target_lidar_front_ = lidar_around_.front- 0.15; // Set target front distance slightly ahead of current reading to encourage moving forward
+                        target_lidar_front_ = lidar_around_.front- 0.12; // Set target front distance slightly ahead of current reading to encourage moving forward
                         current_state_ = NO_FRONT_WALL_INTERSECTION; // Special state to handle intersections without a front wall
                         break;
 
@@ -147,7 +147,7 @@ namespace nodes {
                     //    turn = 0.0;
                     //} else {
                         current_state_ = GO_TO;
-                        target_lidar_front_ = lidar_around_.front - 0.15;
+                        target_lidar_front_ = lidar_around_.front - 0.1;
                         fw_speed = 0.1;
                         turn = 0.0;
                         break;
@@ -164,10 +164,11 @@ namespace nodes {
                         fw_speed = 0.1;
                         turn = 0.0;
                     } else {
-                        //TODO:
                         if(is_wall(lidar_around_.left) && is_wall(lidar_around_.right)) {
                             current_state_ = CORRIDOR;
+                            //current_state_ = STOP; 
                         }else{
+                            //TODO: rozhodnutí kudy dále
                             double notNormalized_angle = current_angle_ - M_PI/2;;
                             notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
                             target_angle_ = normalize_angle(notNormalized_angle);
@@ -188,8 +189,11 @@ namespace nodes {
                             fw_speed = 0.1;
                             turn = 0.0;
                         } else {
-                            current_state_ = CORRIDOR;
-                            break;
+
+                            current_state_ = GO_TO;
+                            target_lidar_front_ = lidar_around_.front - 0.04;
+                            fw_speed = 0.1;
+                            turn = 0.0;
                         }
                     } else {
                         turn = static_cast<float>(std::fmax(-1.0, std::fmin(1.0, angle_error)));
