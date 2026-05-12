@@ -53,9 +53,9 @@ namespace nodes {
         float target_lidar_front_ = 0.0;
         Around lidar_around_;
         double current_angle_ = 0.0;
-        double helper_angle_ = 0.0;
         double target_angle_ = 0.0;
         PID turn_pid_ {2.0, 0.10, 1.5}; // Tuned for quick response with minimal overshoot
+        PID target_angle_pid_ {0.5, 0.0, 0.0}; // Targeting correct angle when turning on the spot
         Watchdog lidarDog{std::chrono::milliseconds(900)}; // 50ms timeout for lidar data
         bool lidarExpired = false;
     };

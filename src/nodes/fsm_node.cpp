@@ -115,7 +115,6 @@ namespace nodes {
 
                     RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle ));
                     set_state(TURN);
-                    helper_angle_ = current_angle_;
                     break;
                 }
                 else if (lidar_around_.front < 0.2 &&
@@ -147,22 +146,15 @@ namespace nodes {
                     0, 
                     std::clamp(lidar_around_.right, 0.0f, 0.2f)-
                     std::clamp(lidar_around_.left, 0.0f, 0.2f),
-                    0.005);
-                //RCLCPP_INFO(this->get_logger(), "fw_speed: %f, turn: %f", fw_speed, turn);
+                    0.025);
                 break;
             case INTERSECTION: // Stop and decide which way to turn
                 if (std::abs(target_angle_ - current_angle_) < 0.1) {
-                    //if (!is_wall(lidar_around_.left)) {
-                    //    fw_speed = 0.1;
-                    //    turn = 0.0;
-                    //} else {
-                        set_state(GO_TO);
-                        target_lidar_front_ = lidar_around_.front - 0.1;
-                        fw_speed = 0.1;
-                        turn = 0.0;
-                        break;
-                    //}
-                    
+                    set_state(GO_TO);
+                    target_lidar_front_ = lidar_around_.front - 0.2;
+                    fw_speed = 0.1;
+                    turn = 0.0;
+                    break;                    
                 } else {
                     turn = std::clamp((target_angle_ - current_angle_), -1.0, 1.0);
                     fw_speed = 0.0;
@@ -193,7 +185,7 @@ namespace nodes {
                     fw_speed = 0.0;
                 }
                 break;
-            case TURN: // Execute the turn, then pop the intersection queue
+            case TURN:
                 {
                     double angle_error = std::remainder(target_angle_ - current_angle_, 2.0 * M_PI);
                     if (std::abs(angle_error) < 0.1) {
@@ -207,7 +199,11 @@ namespace nodes {
                             turn = 0.0;
                         }
                     } else {
-                        turn = static_cast<float>(std::fmax(-1.0, std::fmin(1.0, angle_error)));
+                        turn = std::clamp(target_angle_pid_.update(
+                            target_angle_,
+                            current_angle_,
+                            0.025
+                        ), -1.0, 1.0);
                         fw_speed = 0.0;
                     }
                 }
@@ -238,7 +234,6 @@ namespace nodes {
     int FSMNode::number_of_walls() {
         int count = 0;
         if (is_wall(lidar_around_.front)) count++;
-        // if (is_wall(lidar_around_.back)) count++;
         if (is_wall(lidar_around_.left)) count++;
         if (is_wall(lidar_around_.right)) count++;
         return count;
@@ -249,19 +244,20 @@ namespace nodes {
             RCLCPP_INFO(this->get_logger(), "Transitioning from state %s to state %s", FSMStateNames[current_state_], FSMStateNames[new_state]);
             current_state_ = new_state;
         }
+        if (new_state == TURN) target_angle_pid_.reset();
     }
 
     double FSMNode::decide_target_angle() {
-        if (!is_wall(lidar_around_.right)) { // prefer right turns if both sides are open
-            return current_angle_ - M_PI / 2;
+        if (!is_wall(lidar_around_.front)) {
+            return current_angle_;
         }
-        if (!is_wall(lidar_around_.front)) { // if we cant go right, prefer going straight if possible
-            return current_angle_; // go straight if possible
+        if (!is_wall(lidar_around_.right)) {
+            return current_angle_ - M_PI / 2;
         }
         if (!is_wall(lidar_around_.left)) {
             return current_angle_ + M_PI / 2;
         }
-        return current_angle_ + M_PI; // U-turn
+        return current_angle_ + M_PI;
     }
 
     double FSMNode::aruco_target_angle() {

@@ -57,7 +57,7 @@ namespace nodes {
     void ArucoNode::thread_process_camera_frame(const cv::Mat& frame) {
         try
         {
-            TimePerformance aruco_perf("aruco");
+            // TimePerformance aruco_perf("aruco");
             if (frame_.empty()) {
                 RCLCPP_ERROR(this->get_logger(), "Aruco callback decoded an empty frame.");
                 return;

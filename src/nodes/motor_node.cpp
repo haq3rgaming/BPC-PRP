@@ -4,10 +4,6 @@
 #include <cmath>
 #include <cstdlib>
 
-#define Kp 5.0
-#define Ki 0.0
-#define Kd 0.0
-
 namespace nodes {
     MotorNode::MotorNode(rclcpp::NodeOptions options) : Node("motor_node", options)
     {
