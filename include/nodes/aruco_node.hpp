@@ -27,16 +27,13 @@ namespace nodes {
 
         rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscriber_;
         rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr marker_data_publisher_;
-        rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr marker_found_publisher_;
-        void on_image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
+        void on_image_callback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
 
 
         void flip_image(cv::Mat& frame);
         void process_camera_frame(const cv::Mat& frame);
         
         void publish_marker_data(int data);
-        void publish_marker_found(bool found);
-        void publish_detection_warn(const std::string& msg);
 
         void draw_debug_info(cv::Mat& frame, const std::vector<ArucoMarker>& markers);
     };

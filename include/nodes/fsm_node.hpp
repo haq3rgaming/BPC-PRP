@@ -30,13 +30,20 @@ namespace nodes {
         rclcpp::TimerBase::SharedPtr control_timer_;
         volatile FSMState current_state_ = CALIBRATION;
 
-        //void aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg);
+        void aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg);
         void encoder_callback(const std_msgs::msg::UInt32MultiArray::SharedPtr msg);
         void lidar_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
         void imu_callback(const std_msgs::msg::Float64::SharedPtr msg);
         void publish_velocity(double linear_x, double angular_z);
         void controlLoop();
         double normalize_angle(double angle);
+        
+        void set_state(FSMState new_state) {
+            if (current_state_ != new_state) {
+                RCLCPP_INFO(this->get_logger(), "Transitioning from state %s to state %s", FSMStateNames[current_state_], FSMStateNames[new_state]);
+                current_state_ = new_state;
+            }
+        }
 
         int number_of_walls();
         bool is_wall(float distance);
@@ -53,5 +60,6 @@ namespace nodes {
         double target_angle_ = 0.0;
         PID turn_pid_ {2.0, 0.10, 1.5}; // Tuned for quick response with minimal overshoot
         Watchdog lidarDog{std::chrono::milliseconds(900)}; // 50ms timeout for lidar data
+        bool lidarExpired = false;
     };
 }

@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
     // Create nodes
     auto io_node = std::make_shared<nodes::IoNode>();
     auto motor_node = std::make_shared<nodes::MotorNode>();
-    //auto aruco_node = std::make_shared<nodes::ArucoNode>();
+    // auto aruco_node = std::make_shared<nodes::ArucoNode>();
     auto lidar_node = std::make_shared<nodes::LidarNode>();
     auto imu_node = std::make_shared<nodes::ImuNode>();
     auto fsm_node = std::make_shared<nodes::FSMNode>();
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
     // Add nodes to the executor
     executor->add_node(io_node);
     executor->add_node(motor_node);
-    //executor->add_node(aruco_node);
+    // executor->add_node(aruco_node);
     executor->add_node(lidar_node);
     executor->add_node(imu_node);
     executor->add_node(fsm_node);

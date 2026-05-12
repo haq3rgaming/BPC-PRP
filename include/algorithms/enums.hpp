@@ -10,12 +10,27 @@ namespace nodes {
         GO_TO,
         STOP
     };
+    inline constexpr const char* FSMStateNames[] = {
+        "CALIBRATION",
+        "CORRIDOR",
+        "INTERSECTION",
+        "TURN",
+        "NO_FRONT_WALL_INTERSECTION",
+        "GO_TO",
+        "STOP"
+    };
 
     enum FSMNextIntersection {
         NONE = 0,
         FW,
         LEFT,
         RIGHT
+    };
+    inline constexpr const char* FSMNextIntersectionNames[] = {
+        "NONE",
+        "FW",
+        "LEFT",
+        "RIGHT"
     };
 
     enum ArucoMarkerID {
