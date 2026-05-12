@@ -4,7 +4,7 @@
 
 namespace nodes {
 
-    ImuNode::ImuNode() : Node("imu_node") {
+    ImuNode::ImuNode(rclcpp::NodeOptions options) : Node("imu_node", options) {
         imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>(
             "/bpc_prp_robot/imu",
             1,

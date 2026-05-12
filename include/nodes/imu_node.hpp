@@ -14,7 +14,7 @@ namespace nodes {
 
     class ImuNode : public rclcpp::Node {
     public:
-        ImuNode();
+        ImuNode(rclcpp::NodeOptions options = rclcpp::NodeOptions());
         ~ImuNode() override = default;
 
         // Set the IMU mode

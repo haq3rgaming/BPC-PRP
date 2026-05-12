@@ -9,7 +9,7 @@
 #define Kd 0.0
 
 namespace nodes {
-    MotorNode::MotorNode() : Node("motor_node")
+    MotorNode::MotorNode(rclcpp::NodeOptions options) : Node("motor_node", options)
     {
         target_left_ = 0.0;
         target_right_ = 0.0;

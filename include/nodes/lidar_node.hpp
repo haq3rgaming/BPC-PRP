@@ -11,7 +11,7 @@
 namespace nodes {
     class LidarNode : public rclcpp::Node {
         public:
-        LidarNode();
+        LidarNode(rclcpp::NodeOptions options = rclcpp::NodeOptions());
         ~LidarNode() override = default;
         
         private:

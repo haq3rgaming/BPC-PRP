@@ -8,7 +8,8 @@
 namespace nodes {
     class MotorNode : public rclcpp::Node {
     public:
-        MotorNode();
+        MotorNode(rclcpp::NodeOptions options = rclcpp::NodeOptions());
+        ~MotorNode() override = default;
     private:
         const double WHEEL_DIAMETER = 0.071;
         const double WHEEL_RADIUS = WHEEL_DIAMETER / 2.0;

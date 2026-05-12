@@ -7,8 +7,10 @@
 
 #define WALL_DISTANCE_THRESHOLD 0.3
 
+#define ARUCO
+
 namespace nodes {
-    FSMNode::FSMNode() : Node("fsm_node") {
+    FSMNode::FSMNode(rclcpp::NodeOptions options) : Node("fsm_node", options) {
         aruco_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
             "/bpc_prp_robot/marker_data", 1,
             std::bind(&FSMNode::aruco_callback, this, std::placeholders::_1)
@@ -33,7 +35,7 @@ namespace nodes {
         );
 
         control_timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(5),
+            std::chrono::milliseconds(25),
             std::bind(&FSMNode::controlLoop, this)
         );
 
@@ -119,15 +121,11 @@ namespace nodes {
                 else if (lidar_around_.front < 0.2 &&
                         !is_wall(lidar_around_.left) &&
                         !is_wall(lidar_around_.right)) {
-                    //TODO: rozhodnutí kudy dále
-                    double notNormalized_angle = current_angle_;
-                    if (!is_wall(lidar_around_.left)) {
-                        notNormalized_angle += M_PI / 2;
-                    } else if (!is_wall(lidar_around_.right)) {
-                        notNormalized_angle -= M_PI / 2;
-                    } else {
-                        notNormalized_angle += M_PI; // U-turn
-                    }
+                    #ifdef ARUCO
+                    double notNormalized_angle = aruco_target_angle();
+                    #else
+                    double notNormalized_angle = decide_target_angle();
+                    #endif
                     notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
                     target_angle_ = normalize_angle(notNormalized_angle);
                     set_state(INTERSECTION); // Treat it as an intersection to decide turn direction
@@ -179,29 +177,11 @@ namespace nodes {
                         if(is_wall(lidar_around_.left) && is_wall(lidar_around_.right)) {
                             set_state(CORRIDOR);
                         }else{
-                            //TODO: rozhodnutí kudy dále
-                            // if (exit_queue_.is_empty()) {
-                            //     RCLCPP_WARN(this->get_logger(), "No intersections in queue, defaulting to left turn");
-                            //     target_angle_ = normalize_angle(current_angle_ - M_PI/2);
-                            // } else {
-                            //     FSMNextIntersection next_intersection = exit_queue_.pop();
-                            //     if (next_intersection == LEFT) {
-                            //         target_angle_ = normalize_angle(current_angle_ - M_PI/2);
-                            //     } else if (next_intersection == RIGHT) {
-                            //         target_angle_ = normalize_angle(current_angle_ + M_PI/2);
-                            //     } else {
-                            //         RCLCPP_WARN(this->get_logger(), "Invalid intersection type in queue, defaulting to left turn");
-                            //         target_angle_ = normalize_angle(current_angle_ - M_PI/2);
-                            //     }
-                            // }
-                            double notNormalized_angle = current_angle_;
-                            if (!is_wall(lidar_around_.left)) {
-                                notNormalized_angle += M_PI / 2;
-                            } else if (!is_wall(lidar_around_.right)) {
-                                notNormalized_angle -= M_PI / 2;
-                            } else {
-                                notNormalized_angle += M_PI; // U-turn
-                            }
+                            #ifdef ARUCO
+                            double notNormalized_angle = aruco_target_angle();
+                            #else
+                            double notNormalized_angle = decide_target_angle();
+                            #endif
                             notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
                             target_angle_ = normalize_angle(notNormalized_angle);
                             set_state(INTERSECTION);
@@ -221,7 +201,6 @@ namespace nodes {
                             fw_speed = 0.1;
                             turn = 0.0;
                         } else {
-
                             set_state(GO_TO);
                             target_lidar_front_ = lidar_around_.front - 0.04;
                             fw_speed = 0.1;
@@ -229,7 +208,6 @@ namespace nodes {
                         }
                     } else {
                         turn = static_cast<float>(std::fmax(-1.0, std::fmin(1.0, angle_error)));
-                        //RCLCPP_INFO(this->get_logger(), "Turning... current: %f deg, target: %f deg, turn: %f", RAD_TO_DEG(current_angle_), RAD_TO_DEG(target_angle_), turn);
                         fw_speed = 0.0;
                     }
                 }
@@ -264,6 +242,52 @@ namespace nodes {
         if (is_wall(lidar_around_.left)) count++;
         if (is_wall(lidar_around_.right)) count++;
         return count;
+    }
+
+    void FSMNode::set_state(FSMState new_state) {
+        if (current_state_ != new_state) {
+            RCLCPP_INFO(this->get_logger(), "Transitioning from state %s to state %s", FSMStateNames[current_state_], FSMStateNames[new_state]);
+            current_state_ = new_state;
+        }
+    }
+
+    double FSMNode::decide_target_angle() {
+        if (!is_wall(lidar_around_.right)) { // prefer right turns if both sides are open
+            return current_angle_ - M_PI / 2;
+        }
+        if (!is_wall(lidar_around_.front)) { // if we cant go right, prefer going straight if possible
+            return current_angle_; // go straight if possible
+        }
+        if (!is_wall(lidar_around_.left)) {
+            return current_angle_ + M_PI / 2;
+        }
+        return current_angle_ + M_PI; // U-turn
+    }
+
+    double FSMNode::aruco_target_angle() {
+        if (exit_queue_.is_empty()) {
+            RCLCPP_WARN(this->get_logger(), "No intersections in queue, defaulting to simple turn logic");
+            return decide_target_angle();
+        }
+        
+        switch (exit_queue_.pop())
+        {
+            case FW:
+                return current_angle_;
+            case LEFT:
+                if (!is_wall(lidar_around_.left)) {
+                    return current_angle_ + M_PI / 2;
+                }
+                RCLCPP_WARN(this->get_logger(), "Left turn indicated by marker but left wall detected, defaulting to simple turn logic");
+            case RIGHT:
+                if (!is_wall(lidar_around_.right)) {
+                    return current_angle_ - M_PI / 2;
+                }
+                RCLCPP_WARN(this->get_logger(), "Right turn indicated by marker but right wall detected, defaulting to simple turn logic");
+            default:
+                RCLCPP_WARN(this->get_logger(), "Invalid intersection type in queue, defaulting to simple turn logic");
+        }
+        return decide_target_angle();
     }
 
     void FSMNode::aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg) {

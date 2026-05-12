@@ -10,7 +10,7 @@
 namespace nodes {
     class IoNode : public rclcpp::Node {
     public:
-        IoNode();
+        IoNode(rclcpp::NodeOptions options = rclcpp::NodeOptions());
         ~IoNode() override = default;
     private:
         rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr led_pub_;

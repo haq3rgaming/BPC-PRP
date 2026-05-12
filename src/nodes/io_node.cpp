@@ -5,7 +5,7 @@
 #define LED_ON 16
 
 namespace nodes {
-    IoNode::IoNode() : Node("io_node") {
+    IoNode::IoNode(rclcpp::NodeOptions options) : Node("io_node", options) {
         led_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>(
             "/bpc_prp_robot/rgb_leds", 1
         );

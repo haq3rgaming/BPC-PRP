@@ -1,10 +1,12 @@
 #include "nodes/lidar_node.hpp"
 #include <cmath>
 
+#include "algorithms/perf.hpp"
+
 #define DEG_TO_RAD(x) (M_PI * (x)/180.0)
 
 namespace nodes {
-    LidarNode::LidarNode() : Node("lidar_node") {
+    LidarNode::LidarNode(rclcpp::NodeOptions options) : Node("lidar_node", options) {
         filter_data.right = 0;
         filter_data.left = 0;
         filter_data.front = 0;
@@ -74,7 +76,7 @@ namespace nodes {
         filtered_lidar->publish(msg);
     }
 
-    void LidarNode::on_lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
+    void LidarNode::on_lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
         angle_step=msg->angle_increment;
         lidar_data_=msg->ranges; // Is in m
         filter();

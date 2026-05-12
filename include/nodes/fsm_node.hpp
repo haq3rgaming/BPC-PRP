@@ -16,7 +16,7 @@
 namespace nodes {
     class FSMNode : public rclcpp::Node {
     public:
-        FSMNode();
+        FSMNode(rclcpp::NodeOptions options = rclcpp::NodeOptions());
         ~FSMNode() override = default;
     private:
         const int TICKS_PER_REV = 576;
@@ -38,12 +38,9 @@ namespace nodes {
         void controlLoop();
         double normalize_angle(double angle);
         
-        void set_state(FSMState new_state) {
-            if (current_state_ != new_state) {
-                RCLCPP_INFO(this->get_logger(), "Transitioning from state %s to state %s", FSMStateNames[current_state_], FSMStateNames[new_state]);
-                current_state_ = new_state;
-            }
-        }
+        void set_state(FSMState new_state);
+        double decide_target_angle();
+        double aruco_target_angle();
 
         int number_of_walls();
         bool is_wall(float distance);

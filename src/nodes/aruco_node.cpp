@@ -11,19 +11,21 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core.hpp>
 
+#include "algorithms/perf.hpp"
 
-#define HEADLESS
+
 // #define DEBUG
 
 namespace nodes {
-    ArucoNode::ArucoNode() : Node("aruco_node") {
+    ArucoNode::ArucoNode(rclcpp::NodeOptions options) : Node("aruco_node", options) {
         image_subscriber_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
             "/bpc_prp_robot/camera/compressed",
             1,
             std::bind(&ArucoNode::on_image_callback, this, std::placeholders::_1)
         );
         marker_data_publisher_ = this->create_publisher<std_msgs::msg::UInt8>("/bpc_prp_robot/marker_data", 1);
-        
+        cv::setNumThreads(1);
+
         RCLCPP_INFO(this->get_logger(), "ArucoNode initialized");
     }
 
@@ -52,14 +54,34 @@ namespace nodes {
         publish_marker_data(marker_ids[0]);
     }
 
-    void ArucoNode::draw_debug_info(cv::Mat& frame, const std::vector<ArucoMarker>& markers) {
-        std::vector<std::vector<cv::Point2f>> corners;
-        std::vector<int> ids;
-        for (const auto& marker : markers) {
-            corners.push_back(marker.corners);
-            ids.push_back(marker.id);
+    void ArucoNode::thread_process_camera_frame(const cv::Mat& frame) {
+        try
+        {
+            TimePerformance aruco_perf("aruco");
+            if (frame_.empty()) {
+                RCLCPP_ERROR(this->get_logger(), "Aruco callback decoded an empty frame.");
+                return;
+            }
+
+            flip_image(frame_);
+            process_camera_frame(frame_);
         }
-        cv::aruco::drawDetectedMarkers(frame, corners, ids);
+        catch (const cv::Exception &e)
+        {
+            RCLCPP_ERROR(this->get_logger(), "OpenCV exception: %s", e.what());
+        }
+        catch (cv_bridge::Exception &e)
+        {
+            RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+        }
+        catch (const std::exception &e)
+        {
+            RCLCPP_ERROR(this->get_logger(), "Standard exception: %s", e.what());
+        }
+        catch (...)
+        {
+            RCLCPP_ERROR(this->get_logger(), "Unknown exception occurred in ArucoNode.");
+        }
     }
 
     void ArucoNode::publish_marker_data(int data) {
@@ -77,31 +99,12 @@ namespace nodes {
             RCLCPP_ERROR(this->get_logger(), "Aruco callback received an empty compressed image message.");
             return;
         }
-
-        try
-        {
-            cv::Mat frame = cv_bridge::toCvCopy(msg, "bgr8")->image;
-            if (frame.empty()) {
-                RCLCPP_ERROR(this->get_logger(), "Aruco callback decoded an empty frame.");
-                return;
-            }
-
-            flip_image(frame);
-            process_camera_frame(frame);
-            
-            #ifndef HEADLESS
-            draw_debug_info(frame, detected_markers_);
-            cv::imshow("Camera Feed", frame);
-            cv::waitKey(1);
-            #endif
+        if (processing_thread_.joinable()) {
+            RCLCPP_WARN(this->get_logger(), "Previous processing thread is still running. Skipping this frame.");
+            return;
         }
-        catch (const cv::Exception &e)
-        {
-            RCLCPP_ERROR(this->get_logger(), "OpenCV exception: %s", e.what());
-        }
-        catch (cv_bridge::Exception &e)
-        {
-            RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
-        }
+        frame_ = cv_bridge::toCvCopy(msg, "bgr8")->image;
+        processing_thread_ = std::thread(&ArucoNode::thread_process_camera_frame, this, frame_);
+        processing_thread_.detach();
     }
 }
