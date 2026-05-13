@@ -13,11 +13,14 @@
 #include "algorithms/queue.hpp"
 #include "algorithms/watchdog.hpp"
 
-namespace nodes {
-    class FSMNode : public rclcpp::Node {
+namespace nodes
+{
+    class FSMNode : public rclcpp::Node
+    {
     public:
         FSMNode(rclcpp::NodeOptions options = rclcpp::NodeOptions());
         ~FSMNode() override = default;
+
     private:
         const int TICKS_PER_REV = 576;
 
@@ -37,7 +40,7 @@ namespace nodes {
         void publish_velocity(double linear_x, double angular_z);
         void controlLoop();
         double normalize_angle(double angle);
-        
+
         void set_state(FSMState new_state);
         double decide_target_angle();
         double aruco_target_angle();
@@ -45,8 +48,8 @@ namespace nodes {
         int number_of_walls();
         bool is_wall(float distance);
 
-        Queue exit_queue_ {};
-        Queue treasure_queue_ {};
+        Queue exit_queue_{};
+        Queue treasure_queue_{};
         FSMNextIntersection convert_marker_to_intersection(ArucoMarkerID marker);
         uint32_t left_encoder_ticks_ = 0;
         uint32_t right_encoder_ticks_ = 0;
@@ -54,8 +57,8 @@ namespace nodes {
         Around lidar_around_;
         double current_angle_ = 0.0;
         double target_angle_ = 0.0;
-        PID turn_pid_ {2.0, 0.10, 1.5}; // Tuned for quick response with minimal overshoot
-        PID target_angle_pid_ {0.5, 0.0, 0.0}; // Targeting correct angle when turning on the spot
+        PID turn_pid_{2.0, 0.10, 1.5};                     // Tuned for quick response with minimal overshoot
+        PID target_angle_pid_{1.0, 0.0, 0.1};              // Targeting correct angle when turning on the spot
         Watchdog lidarDog{std::chrono::milliseconds(900)}; // 50ms timeout for lidar data
         bool lidarExpired = false;
     };
