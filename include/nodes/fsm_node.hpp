@@ -53,13 +53,14 @@ namespace nodes
         FSMNextIntersection convert_marker_to_intersection(ArucoMarkerID marker);
         uint32_t left_encoder_ticks_ = 0;
         uint32_t right_encoder_ticks_ = 0;
+        float target_lidar_base_ = 0.0;
         float target_lidar_front_ = 0.0;
         Around lidar_around_;
         double current_angle_ = 0.0;
         double target_angle_ = 0.0;
         PID turn_pid_{2.0, 0.10, 1.5};                     // Tuned for quick response with minimal overshoot
         PID target_angle_pid_{1.0, 0.0, 0.1};              // Targeting correct angle when turning on the spot
-        Watchdog lidarDog{std::chrono::milliseconds(900)}; // 50ms timeout for lidar data
+        Watchdog lidarDog{std::chrono::milliseconds(500)}; // 50ms timeout for lidar data
         bool lidarExpired = false;
     };
 }
