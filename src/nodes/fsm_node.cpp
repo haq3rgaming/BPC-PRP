@@ -9,7 +9,7 @@
 
 #define WALL_DISTANCE_THRESHOLD 0.3
 #define ANGLE_PRECISION 0.1
-#define ANGLE_SPEED_TRIM 1.0
+#define ANGLE_SPEED_TRIM 1.5
 
 #define ARUCO
 
@@ -63,7 +63,6 @@ namespace nodes
             {
                 target_angle = DEG_TO_RAD(-180);
             }
-            // target_angle = DEG_TO_RAD(180);
         }
         else if (IN_RANGE(angle, DEG_TO_RAD(-110), DEG_TO_RAD(-70)))
         {
@@ -88,7 +87,6 @@ namespace nodes
     }
     void FSMNode::controlLoop()
     {
-        // RCLCPP_INFO(this->get_logger(), "forward %f", lidar_around_.front);
         float fw_speed = 0.0;
         float turn = 0.0;
         if (lidarDog.is_expired() && current_state_ != CALIBRATION)
@@ -106,8 +104,6 @@ namespace nodes
             RCLCPP_INFO(this->get_logger(), "Lidar data received, resuming normal operation");
             lidarExpired = false;
         }
-        // RCLCPP_INFO(this->get_logger(), "Lidar data age: %ld ms", lidarDog.age().count());
-
         switch (current_state_)
         {
         case CALIBRATION: // IMU calibration, wait for first IMU message
@@ -136,11 +132,8 @@ namespace nodes
                 }
 
                 notNormalized_angle = std::remainder(notNormalized_angle, 2.0 * M_PI); // Wrap angle to [-pi, pi]
-                // RCLCPP_INFO(this->get_logger(), "notNormalized angle: %f deg", RAD_TO_DEG(notNormalized_angle));
                 //  Normalize target angle to 1/2pi,pi,-pi/2,-pi
                 target_angle_ = normalize_angle(notNormalized_angle);
-
-                // RCLCPP_INFO(this->get_logger(), "target angle: %f deg, notnormalized %f deg", RAD_TO_DEG(target_angle_), RAD_TO_DEG(notNormalized_angle));
                 set_state(TURN);
                 break;
             }
@@ -158,7 +151,7 @@ namespace nodes
                 set_state(INTERSECTION); // Treat it as an intersection to decide turn direction
                 break;
             }
-            else if (lidar_around_.front > 0.5 &&
+            else if (lidar_around_.front > 0.6 &&
                      (lidar_around_.left > 0.3 ||
                       lidar_around_.right > 0.3))
             {
@@ -170,7 +163,7 @@ namespace nodes
                 break;
             }
 
-            fw_speed = std::clamp((lidar_around_.front - 0.15), 0.0, 0.1);
+            fw_speed = std::clamp((lidar_around_.front - 0.15), 0.0, 0.2);
             turn = turn_pid_.update(
                 0,
                 std::clamp(lidar_around_.right, 0.0f, 0.2f) -
@@ -180,17 +173,10 @@ namespace nodes
         case INTERSECTION: // Stop and decide which way to turn
             if (std::abs(target_angle_ - current_angle_) < ANGLE_PRECISION)
             {
-                publish_velocity(0.0, 0.0);
-                // sleep(1);
-                // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-                // unsigned int x = 0;
-                // while (x < 70000)
-                // {
-                //     x++;
-                // }
-                set_state(GO_TO);
-                target_lidar_front_ = target_lidar_base_ - 0.15;
-                fw_speed = 0.1;
+                publish_velocity(0.1, 0.0);
+                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+                set_state(CORRIDOR);
+                fw_speed = 0.0;
                 turn = 0.0;
                 break;
             }
@@ -275,8 +261,6 @@ namespace nodes
             {
                 if (!is_wall(lidar_around_.front))
                 {
-
-                    // RCLCPP_INFO(this->get_logger(), "forward %f target %f", lidar_around_.front, target_lidar_front_);
                     fw_speed = 0.1;
                     turn = 0.0;
                 }
@@ -351,13 +335,17 @@ namespace nodes
 
     double FSMNode::aruco_target_angle()
     {
-        if (exit_queue_.is_empty())
+        if (exit_queue_.is_empty() && treasure_queue_.is_empty())
         {
-            RCLCPP_WARN(this->get_logger(), "No intersections in queue, defaulting to simple turn logic");
+            RCLCPP_WARN(this->get_logger(), "No intersections in any queues, defaulting to simple turn logic");
             return decide_target_angle();
         }
 
-        FSMNextIntersection code = exit_queue_.pop();
+        FSMNextIntersection code = NONE;
+        // if (!exit_queue_.is_empty())
+        //     code = exit_queue_.pop();
+        if (!treasure_queue_.is_empty())
+            code = treasure_queue_.pop();
         RCLCPP_INFO(this->get_logger(), "Popped intersection %s from queue", FSMNextIntersectionNames[code]);
         switch (code)
         {
@@ -395,24 +383,41 @@ namespace nodes
     void FSMNode::aruco_callback(const std_msgs::msg::UInt8::SharedPtr msg)
     {
         ArucoMarkerID marker = static_cast<ArucoMarkerID>(msg->data);
-        FSMNextIntersection marker_intersection = convert_marker_to_intersection(marker);
-        if (marker_intersection == NONE)
-            return;
-        if (exit_queue_.push(marker_intersection))
-        {
-            RCLCPP_INFO(this->get_logger(), "Added intersection %s to queue", FSMNextIntersectionNames[marker_intersection]);
-        }
-    }
-    FSMNextIntersection FSMNode::convert_marker_to_intersection(ArucoMarkerID marker)
-    {
-        // Only consider exit markers for now, we can add treasure markers later if needed
+        // FSMNextIntersection marker_intersection = convert_marker_to_intersection(marker);
+        bool pushed_exit = false;
+        bool pushed_treasure = false;
         switch (marker)
         {
         case EXIT_FW:
+        case EXIT_LEFT:
+        case EXIT_RIGHT:
+            pushed_exit = exit_queue_.push(convert_marker_to_intersection(marker));
+            break;
+        case TREASURE_FW:
+        case TREASURE_LEFT:
+        case TREASURE_RIGHT:
+            pushed_treasure = treasure_queue_.push(convert_marker_to_intersection(marker));
+            break;
+        default:
+            break;
+        }
+        if (pushed_exit)
+            RCLCPP_INFO(this->get_logger(), "Added intersection %s to exit queue", FSMNextIntersectionNames[convert_marker_to_intersection(marker)]);
+        if (pushed_treasure)
+            RCLCPP_INFO(this->get_logger(), "Added intersection %s to treasure queue", FSMNextIntersectionNames[convert_marker_to_intersection(marker)]);
+    }
+    FSMNextIntersection FSMNode::convert_marker_to_intersection(ArucoMarkerID marker)
+    {
+        switch (marker)
+        {
+        case EXIT_FW:
+        case TREASURE_FW:
             return FW;
         case EXIT_LEFT:
+        case TREASURE_LEFT:
             return LEFT;
         case EXIT_RIGHT:
+        case TREASURE_RIGHT:
             return RIGHT;
         default:
             return NONE;
